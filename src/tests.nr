@@ -383,6 +383,23 @@ fn test_from_field_bits_eq_253_rejects_neg_one() {
     let _: U253 = U253::from(-1);
 }
 
+// Unconstrained `From<Field>` must fail for values which do not fit, as the constrained version
+// does, rather than truncating them.
+#[test(should_fail_with = "attempt to convert a Field which does not fit")]
+unconstrained fn test_from_field_unconstrained_overflow() {
+    // 2^252
+    let _: U252 = U252::from(0x1000 * TWO_POW_240);
+}
+
+#[test]
+unconstrained fn test_from_field_unconstrained() {
+    // 2^252 - 1
+    let max: Field = 0x1000 * TWO_POW_240 - 1;
+    let a: U252 = U252::from(max);
+    assert(a.get_limbs() == [TWO_POW_120 - 1, TWO_POW_120 - 1, 0xfff]);
+    assert(U256::from(-1).get_limbs() == from_field::<3, 256>(-1));
+}
+
 #[test]
 fn test_to_field_one() {
     let field: Field = 1;
