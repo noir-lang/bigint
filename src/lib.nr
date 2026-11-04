@@ -21,7 +21,6 @@ pub mod internal {
     // Constrained operations
     pub use crate::fns::constrained_ops::add;
     pub use crate::fns::constrained_ops::assert_is_not_equal;
-    pub use crate::fns::constrained_ops::assert_is_not_zero;
     pub use crate::fns::constrained_ops::assert_is_not_zero_integer;
     pub use crate::fns::constrained_ops::cmp;
     pub use crate::fns::constrained_ops::derive_from_seed;

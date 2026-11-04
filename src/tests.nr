@@ -616,7 +616,7 @@ where
 
     let a: BN = BN::derive_from_seed([1, 2, 3, 4]);
     assert(a.is_zero() == false);
-    a.assert_is_not_zero();
+    assert(!a.is_zero());
 }
 
 fn test_assert_is_not_equal<let N: u32, BN>()
@@ -1012,8 +1012,8 @@ unconstrained fn test_unconstrained_div_rem_by_zero() {
 }
 
 #[test(should_fail_with = "attempt to divide by zero")]
-unconstrained fn test_unconstrained_div_by_zero() {
-    let _ = U256::from(7).__div(&U256::zero());
+unconstrained fn test_div_by_zero_unconstrained() {
+    let _ = U256::from(7) / U256::zero();
 }
 
 // ------------------------------ EXPRESSIONS TESTS ------------------------------

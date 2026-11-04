@@ -169,15 +169,6 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
     /// No constraints are generated. Constrain the result using `evaluate_quadratic_expression`.
     unconstrained fn __sqr(&self) -> Self;
 
-    /// Unconstrained unsigned integer division: computes `floor(self / other)`.
-    ///
-    /// # Requirements
-    /// - `other` must not be zero
-    ///
-    /// # Safety
-    /// No constraints are generated. Constrain the result using `evaluate_quadratic_expression`.
-    unconstrained fn __div(&self, other: &Self) -> Self;
-
     /// Unconstrained integer division with remainder.
     ///
     /// Returns `(quotient, remainder)` where `self == quotient * divisor + remainder`
@@ -210,9 +201,6 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
 
     /// Returns `true` if `self == 0`.
     fn is_zero(&self) -> bool;
-
-    /// Asserts that `self != 0`.
-    fn assert_is_not_zero(&self);
 
     /// Validates that each limb is properly range-constrained.
     ///
@@ -403,10 +391,6 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
                 Self {limbs: $crate::internal::__sqr::<$N, $BITS>(&self.get_limbs()) }
             }
 
-            unconstrained fn __div(&self, divisor: &Self) -> Self {
-                Self { limbs: $crate::internal::__div_rem(&self.get_limbs(), &divisor.get_limbs()).0 }
-            }
-
             unconstrained fn __div_rem(&self, divisor: &Self) -> (Self, Self) {
                 let (q, r) = $crate::internal::__div_rem(&self.get_limbs(), &divisor.get_limbs());
                 (Self{limbs: q}, Self{limbs: r})
@@ -444,11 +428,6 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
             fn is_zero(&self) -> bool {
                 let limbs = self.get_limbs();
                 $crate::internal::is_zero::<$N, $BITS>(&limbs)
-            }
-
-            fn assert_is_not_zero(&self) {
-                let limbs = self.get_limbs();
-                $crate::internal::assert_is_not_zero::<$N, $BITS>(&limbs);
             }
 
         }
