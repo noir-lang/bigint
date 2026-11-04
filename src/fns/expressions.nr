@@ -680,7 +680,7 @@ pub(crate) fn evaluate_quadratic_expression<let N: u32, let BITS: u32, let LHS_N
 
 // ------------------------------ UDIV MOD EXPRESSION ------------------------------
 
-/// Given a `udiv_mod` `BigInt` expression that is equal to `0` over integers, compute the borrow flags (unconstrained)
+/// Given a `div_rem` `BigInt` expression that is equal to `0` over integers, compute the borrow flags (unconstrained)
 ///
 /// Mirror function of `__compute_quadratic_expression_with_borrow_flags` optimized to compute borrow flags of an expression:
 ///     divisor * quotient + remainder - numerator = 0
@@ -692,7 +692,7 @@ pub(crate) fn evaluate_quadratic_expression<let N: u32, let BITS: u32, let LHS_N
 ///         borrow flags for the first `N` limbs of
 ///             quotient * divisor + remainder - numerator.
 ///
-///         For an honest `udiv_mod` relation we also have
+///         For an honest `div_rem` relation we also have
 ///             quotient * divisor <= numerator < B^N,
 ///         so the true product fits into `N` limbs as an integer.
 ///     2. Instead of subtracting `quotient * MOD` we subtract `numerator`. This is due to the fact that
@@ -702,7 +702,7 @@ pub(crate) fn evaluate_quadratic_expression<let N: u32, let BITS: u32, let LHS_N
 /// We leave the borrow values at 2^{246}, even though we should never reach this bound with just 3 terms
 /// The cases where it can happen are: N >= 64 (middle limb will have 64 additions). And it is a pure completeness issue
 /// But the rest of the library will probably not work with that massive number anyway
-unconstrained fn __compute_udiv_mod_expression_with_borrow_flags<let N: u32, let BITS: u32>(
+unconstrained fn __compute_div_rem_expression_with_borrow_flags<let N: u32, let BITS: u32>(
     numerator: &[u128; N],
     divisor: &[u128; N],
     quotient: &[u128; N],
@@ -722,7 +722,7 @@ unconstrained fn __compute_udiv_mod_expression_with_borrow_flags<let N: u32, let
     __compute_borrow_flags(product_limbs, numerator_field)
 }
 
-/// Constrained version of `__compute_udiv_mod_expression_with_borrow_flags`
+/// Constrained version of `__compute_div_rem_expression_with_borrow_flags`
 ///
 /// Computes the following expression in-circuit:
 ///     quotient * divisor + remainder - numerator = 0
@@ -746,7 +746,7 @@ unconstrained fn __compute_udiv_mod_expression_with_borrow_flags<let N: u32, let
 /// the product has degree < N, i.e.
 ///     quotient * divisor < 2^{120 * N},
 /// so `quotient * divisor` fits into `N` 120-bit limbs and does not overflow.
-fn compute_udiv_mod_expression<let N: u32, let BITS: u32>(
+fn compute_div_rem_expression<let N: u32, let BITS: u32>(
     numerator: &[u128; N],
     divisor: &[u128; N],
     quotient: &[u128; N],
@@ -754,7 +754,7 @@ fn compute_udiv_mod_expression<let N: u32, let BITS: u32>(
 ) -> [Field; N] {
     // Safety: use an unconstrained function to compute the value of the quotient and borrow_flags out-of-circuit
     let borrow_flags: [bool; N - 1] = unsafe {
-        __compute_udiv_mod_expression_with_borrow_flags::<N, BITS>(
+        __compute_div_rem_expression_with_borrow_flags::<N, BITS>(
             numerator,
             divisor,
             quotient,
@@ -781,7 +781,7 @@ fn compute_udiv_mod_expression<let N: u32, let BITS: u32>(
     apply_borrow_flags(expression_limbs, borrow_flags)
 }
 
-/// Constrain a `udiv_mod` `BigInt` expression to be equal to 0
+/// Constrain a `div_rem` `BigInt` expression to be equal to 0
 ///
 /// Mirror function of `evaluate_quadratic_expression`
 ///
@@ -797,7 +797,7 @@ fn compute_udiv_mod_expression<let N: u32, let BITS: u32>(
 /// relation holds and all constraints are satisfied.
 ///
 /// The only possibility to break completeness is by providing a `BigInt` with `N >= 64`
-/// See `__compute_udiv_mod_expression_with_borrow_flags` for details
+/// See `__compute_div_rem_expression_with_borrow_flags` for details
 ///
 /// ## Soundness
 /// This function is conditionally sound: it enforces that the degree-2 relation
@@ -808,7 +808,7 @@ fn compute_udiv_mod_expression<let N: u32, let BITS: u32>(
 ///     quotient * divisor + remainder - numerator = 0
 ///
 /// then we can set quotient' = quotient - 1, remainder' = remainder + divisor
-pub(crate) fn validate_udiv_mod_expression<let N: u32, let BITS: u32>(
+pub(crate) fn validate_div_rem_expression<let N: u32, let BITS: u32>(
     numerator: &[u128; N],
     divisor: &[u128; N],
     quotient: &[u128; N],
@@ -824,6 +824,6 @@ pub(crate) fn validate_udiv_mod_expression<let N: u32, let BITS: u32>(
     validate_in_range::<N, BITS>(remainder);
 
     let expression_limbs: [Field; N] =
-        compute_udiv_mod_expression::<N, BITS>(numerator, divisor, quotient, remainder);
+        compute_div_rem_expression::<N, BITS>(numerator, divisor, quotient, remainder);
     validate_expression_is_zero(expression_limbs);
 }

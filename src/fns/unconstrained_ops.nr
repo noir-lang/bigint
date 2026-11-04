@@ -156,7 +156,7 @@ pub unconstrained fn __pow<let N: u32, let BITS: u32>(
 ///   3. divisor * quotient + remainder = numerator
 ///
 /// Fails if the divisor is zero.
-pub unconstrained fn __udiv_mod<let N: u32>(
+pub unconstrained fn __div_rem<let N: u32>(
     numerator: &[u128; N],
     divisor: &[u128; N],
 ) -> ([u128; N], [u128; N]) {
