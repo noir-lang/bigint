@@ -2,7 +2,9 @@ use crate::bigint::BigInt;
 use crate::bigint::derive_bigint;
 use crate::bigint::{evaluate_quadratic_expression, to_field};
 use crate::constants::{GRUMPKIN_MODULUS, TWO_POW_120, TWO_POW_240};
-use crate::fns::constrained_ops::{from_field, validate_gt};
+use crate::fns::constrained_ops::{
+    assert_add_no_overflow, assert_sub_no_overflow, from_field, validate_gt,
+};
 use crate::fns::expressions::{assert_product_limbs_fit_in_246_bits, validate_udiv_mod_expression};
 use crate::fns::modulus::get_modulus;
 use crate::fns::unconstrained_helpers::{__helper_add, __helper_sub};
@@ -762,7 +764,7 @@ where
     assert_eq(limbs, true_limbs);
 }
 
-#[test(should_fail_with = "call to assert_max_bit_size")]
+#[test(should_fail_with = "attempt to add with overflow")]
 fn test_add_U256_overflow() {
     // (2^256 - 1) + 1 = 2^256 overflows
     let _: U256 = U256::from_limbs(U256_MAX) + U256::one();
@@ -776,6 +778,35 @@ unconstrained fn test_add_U256_overflow_unconstrained() {
 #[test(should_fail_with = "attempt to add with overflow")]
 unconstrained fn test_unconstrained_add_U256_overflow() {
     let _: U256 = U256::from_limbs(U256_MAX).__add(&U256::one());
+}
+
+// The witness hints fail first with a descriptive message, so check the constraints directly: no
+// choice of carry or borrow flags lets an overflowing sum or an underflowing difference through.
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_add_constraints_reject_overflow_honest_flags() {
+    // (2^256 - 1) + 1: the honest flags carry out of every limb
+    let _ = assert_add_no_overflow::<3, 256>(&U256_MAX, &[1, 0, 0], &[true, true]);
+}
+
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_add_constraints_reject_overflow_no_carries() {
+    let _ = assert_add_no_overflow::<3, 256>(&U256_MAX, &[1, 0, 0], &[false, false]);
+}
+
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_add_constraints_reject_overflow_partial_carries() {
+    let _ = assert_add_no_overflow::<3, 256>(&U256_MAX, &[1, 0, 0], &[true, false]);
+}
+
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_sub_constraints_reject_underflow_honest_flags() {
+    // 0 - 1: the honest flags borrow into every limb
+    let _ = assert_sub_no_overflow::<3, 256>(&[0, 0, 0], &[1, 0, 0], &[true, true]);
+}
+
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_sub_constraints_reject_underflow_no_borrows() {
+    let _ = assert_sub_no_overflow::<3, 256>(&[0, 0, 0], &[1, 0, 0], &[false, false]);
 }
 
 #[test]
@@ -797,7 +828,7 @@ fn test_add_U256_carry() {
     assert(c.get_limbs() == [0, 1, 0]);
 }
 
-#[test(should_fail_with = "call to assert_max_bit_size")]
+#[test(should_fail_with = "attempt to subtract with overflow")]
 fn test_sub_U256_underflow() {
     let _: U256 = U256::zero() - U256::one();
 }
@@ -823,7 +854,7 @@ fn test_sub_U256() {
     assert(c.get_limbs() == [TWO_POW_120 - 1, 0, 0]);
 }
 
-#[test(should_fail_with = "call to assert_max_bit_size")]
+#[test(should_fail_with = "attempt to subtract with overflow")]
 fn test_sub_U2048_underflow() {
     let a: U2048 = small_from_seed([1, 2, 3, 4]);
     let b: U2048 = a + U2048::one();

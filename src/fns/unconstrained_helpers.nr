@@ -52,7 +52,11 @@ pub(crate) unconstrained fn __from_field<let N: u32>(val: Field) -> [u128; N] {
 /// Compute the carry flags for the limb-wise addition `lhs + rhs` (unconstrained)
 ///
 /// `carry_flags[i]` is set if limb `i` of `lhs + rhs` (including the carry into it) is `>= 2^{120}`.
-pub(crate) unconstrained fn compute_carry_flags<let N: u32>(
+///
+/// Fails with a descriptive message if the sum overflows `2^BITS`. This is not needed for
+/// soundness, as `add` constrains the result, but otherwise an overflow would only be reported as
+/// a failed range check.
+pub(crate) unconstrained fn compute_carry_flags<let N: u32, let BITS: u32>(
     lhs: &[u128; N],
     rhs: &[u128; N],
 ) -> [bool; N - 1] {
@@ -62,7 +66,24 @@ pub(crate) unconstrained fn compute_carry_flags<let N: u32>(
         carry = (lhs[i] + rhs[i] + carry) >> 120;
         carry_flags[i] = carry != 0;
     }
+    let top_limb_bits: u128 = (BITS - (N - 1) * 120) as u128;
+    assert(
+        ((lhs[N - 1] + rhs[N - 1] + carry) >> top_limb_bits) == 0,
+        "attempt to add with overflow",
+    );
     carry_flags
+}
+
+/// Compute the borrow flags for the limb-wise subtraction `lhs - rhs` (unconstrained)
+///
+/// Fails with a descriptive message if `rhs > lhs`. As for `compute_carry_flags`, this is not
+/// needed for soundness.
+pub(crate) unconstrained fn compute_sub_borrow_flags<let N: u32>(
+    lhs: &[u128; N],
+    rhs: &[u128; N],
+) -> [bool; N - 1] {
+    assert(__gte(lhs, rhs), "attempt to subtract with overflow");
+    compute_borrow_flags(lhs, rhs)
 }
 
 /// Compute borrow flags for lhs - rhs (unconstrained)
