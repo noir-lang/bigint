@@ -106,7 +106,9 @@ These generate no constraints. Their results must be constrained, ideally with `
 
 ### Conversions
 
-- `From<Field>`: `U256::from(x)`
+- `From<Field>`: `U256::from(x)`, failing if the value does not fit
+- `From<u8>`, `From<u16>`, `From<u32>`, `From<u64>`, `From<u128>`: from native integers, e.g. `U256::from(x as u64)`. `From<u128>` fails if the value does not fit, for types narrower than 128 bits
+- Widening conversions between the pre-defined types: `From<U256> for U512`, `From<U256> for U1024`, ..., `From<U4096> for U8192`. These zero-extend the value, e.g. `let b: U512 = a.into();`
 - `to_field(x)`: converts to a `Field`, failing if the value does not fit
 - `from_be_bytes`, `from_le_bytes`, `to_be_bytes`, `to_le_bytes`: byte conversions using `(BITS + 7) / 8` bytes
 

@@ -5,6 +5,9 @@ mod constants;
 // Pre-defined `BigInt`s for people to use:
 pub mod types;
 
+// Widening conversions between the pre-defined `BigInt`s
+mod conversions;
+
 // Free functions and other utils, called by the BigInt structs
 pub(crate) mod fns;
 pub(crate) mod utils;

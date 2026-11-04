@@ -487,6 +487,49 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
             }
         }
 
+        impl std::convert::From<u8> for $typ {
+            fn from(input: u8) -> Self {
+                // Every `u8` fits in the bottom limb, and every `BigInt` has at least two limbs
+                let mut limbs: [u128; $N] = [0; $N];
+                limbs[0] = input as u128;
+                $typ { limbs }
+            }
+        }
+
+        impl std::convert::From<u16> for $typ {
+            fn from(input: u16) -> Self {
+                // Every `u16` fits in the bottom limb, and every `BigInt` has at least two limbs
+                let mut limbs: [u128; $N] = [0; $N];
+                limbs[0] = input as u128;
+                $typ { limbs }
+            }
+        }
+
+        impl std::convert::From<u32> for $typ {
+            fn from(input: u32) -> Self {
+                // Every `u32` fits in the bottom limb, and every `BigInt` has at least two limbs
+                let mut limbs: [u128; $N] = [0; $N];
+                limbs[0] = input as u128;
+                $typ { limbs }
+            }
+        }
+
+        impl std::convert::From<u64> for $typ {
+            fn from(input: u64) -> Self {
+                // Every `u64` fits in the bottom limb, and every `BigInt` has at least two limbs
+                let mut limbs: [u128; $N] = [0; $N];
+                limbs[0] = input as u128;
+                $typ { limbs }
+            }
+        }
+
+        impl std::convert::From<u128> for $typ {
+            fn from(input: u128) -> Self {
+                // A `u128` may not fit in the bottom limb, or in a `BigInt` narrower than 128 bits
+                $typ { limbs: $crate::internal::from_field::<$N, $BITS>(input as Field) }
+            }
+        }
+
         impl std::ops::Add for $typ {
             fn add(self, other: Self) -> Self {
                 $typ { limbs: $crate::internal::add::<$N, $BITS>(&self.limbs, &other.limbs) }

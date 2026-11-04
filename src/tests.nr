@@ -7,9 +7,12 @@ use crate::fns::expressions::{assert_product_limbs_fit_in_246_bits, validate_udi
 use crate::fns::modulus::get_modulus;
 use crate::fns::unconstrained_helpers::__helper_add;
 
+use crate::types::U1024::U1024;
 use crate::types::U2048::U2048;
 use crate::types::U256::U256;
+use crate::types::U4096::U4096;
 use crate::types::U512::U512;
+use crate::types::U8192::U8192;
 
 // Test-only unsigned integer types. Every shipped type is at least 256 bits wide, but some code
 // paths only apply to narrower widths:
@@ -21,6 +24,7 @@ use crate::types::U512::U512;
 // - `U253`: the widest type whose values always fit within the native field, as `2^253` is the
 //   largest power of two below the Grumpkin modulus. It covers `from_field` relying on the range
 //   check alone at that boundary.
+// - `U125`: a type narrower than `u128`, so `From<u128>` must reject values which do not fit.
 
 // A 252-bit unsigned integer
 #[derive_bigint(252)]
@@ -32,6 +36,12 @@ pub struct U252 {
 #[derive_bigint(253)]
 pub struct U253 {
     limbs: [u128; 3],
+}
+
+// A 125-bit unsigned integer, narrower than `u128`
+#[derive_bigint(125)]
+pub struct U125 {
+    limbs: [u128; 2],
 }
 
 // 2^256 - 1
@@ -398,6 +408,84 @@ unconstrained fn test_from_field_unconstrained() {
     let a: U252 = U252::from(max);
     assert(a.get_limbs() == [TWO_POW_120 - 1, TWO_POW_120 - 1, 0xfff]);
     assert(U256::from(-1).get_limbs() == from_field::<3, 256>(-1));
+}
+
+// ------------------------------ CONVERSIONS FROM NATIVE INTEGERS ------------------------------
+
+#[test]
+fn test_from_native_integers() {
+    let expected: U256 = U256::from(200);
+    assert(U256::from(200 as u8) == expected);
+    assert(U256::from(200 as u16) == expected);
+    assert(U256::from(200 as u32) == expected);
+    assert(U256::from(200 as u64) == expected);
+    assert(U256::from(200 as u128) == expected);
+
+    let u64_max: u64 = 0xffffffffffffffff;
+    assert(U2048::from(u64_max).get_limb(0) == u64_max as u128);
+
+    // u128::MAX = 2^128 - 1 spans two limbs
+    let u128_max: u128 = 0xffffffffffffffffffffffffffffffff;
+    assert(U256::from(u128_max).get_limbs() == [TWO_POW_120 - 1, 0xff, 0]);
+    assert(
+        U125::from(0x1fffffffffffffffffffffffffffffff as u128).get_limbs()
+            == [TWO_POW_120 - 1, 0x1f],
+    );
+}
+
+#[test]
+unconstrained fn test_from_native_integers_unconstrained() {
+    let u128_max: u128 = 0xffffffffffffffffffffffffffffffff;
+    assert(U256::from(u128_max).get_limbs() == [TWO_POW_120 - 1, 0xff, 0]);
+    assert(U256::from(7 as u64) == U256::from(7));
+}
+
+// A `u128` which does not fit in a 125-bit type is rejected
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_from_u128_overflow() {
+    let _: U125 = U125::from(0x20000000000000000000000000000000 as u128);
+}
+
+#[test(should_fail_with = "attempt to convert a Field which does not fit")]
+unconstrained fn test_from_u128_overflow_unconstrained() {
+    let _: U125 = U125::from(0x20000000000000000000000000000000 as u128);
+}
+
+// ------------------------------ WIDENING CONVERSIONS ------------------------------
+
+#[test]
+fn test_widening_conversions() {
+    let max: U256 = U256::from_limbs(U256_MAX);
+    let wide: U512 = U512::from(max);
+    assert(wide.get_limbs() == [TWO_POW_120 - 1, TWO_POW_120 - 1, 0xffff, 0, 0]);
+
+    // Converting directly and via intermediate widths agree
+    let a: U256 = U256::derive_from_seed([1, 2, 3, 4]);
+    let direct: U8192 = U8192::from(a);
+    let chained: U8192 = U8192::from(U4096::from(U2048::from(U1024::from(U512::from(a)))));
+    assert(direct == chained);
+
+    // `Into` is available through `From`
+    let b: U1024 = a.into();
+    assert(b == U1024::from(a));
+}
+
+// Widening allows computing values which would overflow the narrower type
+#[test]
+fn test_widening_avoids_overflow() {
+    let max: U256 = U256::from_limbs(U256_MAX);
+    let wide: U512 = U512::from(max);
+    // (2^256 - 1)^2 = 2^512 - 2^257 + 1
+    let square: U512 = wide * wide;
+    assert(square.get_limbs()[0] == 1);
+    assert(square / wide == wide);
+}
+
+// Widening an unnormalised value is rejected rather than producing an unnormalised result
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_widening_rejects_unnormalised() {
+    let a: U256 = U256::from_limbs_unsafe([TWO_POW_120, 0, 0]);
+    let _: U512 = U512::from(a);
 }
 
 #[test]
