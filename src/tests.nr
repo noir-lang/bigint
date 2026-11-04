@@ -11,8 +11,16 @@ use crate::types::U2048::U2048;
 use crate::types::U256::U256;
 use crate::types::U512::U512;
 
-// Test-only unsigned integer types whose values always fit within the native field
-// (`BITS <= 253`), used to exercise code paths specific to such types.
+// Test-only unsigned integer types. Every shipped type is at least 256 bits wide, but some code
+// paths only apply to narrower widths:
+//
+// - `U252`: a width below the native field, and not a multiple of 8. It covers `to_field` and
+//   `from_field` skipping the comparison against the Grumpkin modulus, byte conversions
+//   range-checking the bits of the most significant byte, and `derive_from_seed` masking the
+//   bits of the top limb (which holds 12 bits).
+// - `U253`: the widest type whose values always fit within the native field, as `2^253` is the
+//   largest power of two below the Grumpkin modulus. It covers `from_field` relying on the range
+//   check alone at that boundary.
 
 // A 252-bit unsigned integer
 #[derive_bigint(252)]
@@ -230,6 +238,27 @@ fn test_validate_derive_from_seed() {
     assert(result_bn.get_limb(0) == 0xfd2a2cad9bdafe1cf39def3d71793a);
     assert(result_bn.get_limb(1) == 0xb2b0e456e76ec08043511c2c398ef6);
     assert(result_bn.get_limb(2) == 0x000000000000000000000000009093);
+}
+
+// `derive_from_seed` must mask the bits of the most significant byte of the top limb when its
+// width is not a multiple of 8: the top limb of a `U252` holds 12 bits. The constrained and
+// unconstrained implementations must also agree.
+#[test]
+fn test_derive_from_seed_masks_top_limb() {
+    let mut max_top_limb: u128 = 0;
+    for i in 0..32 {
+        let seed: [u8; 2] = [i as u8, 7];
+        let a: U252 = U252::derive_from_seed(seed);
+        // Safety: test code
+        let b: U252 = unsafe { U252::__derive_from_seed(seed) };
+        assert(a == b);
+        if a.get_limb(2) > max_top_limb {
+            max_top_limb = a.get_limb(2);
+        }
+    }
+    assert(max_top_limb < 0x1000);
+    // With 32 samples, the top limb uses its high bits as well (otherwise the mask is too narrow)
+    assert(max_top_limb >= 0x800);
 }
 
 // ------------------------------ LIMB ACCESS TESTS ------------------------------
