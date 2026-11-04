@@ -22,7 +22,6 @@ pub mod internal {
     pub use crate::fns::constrained_ops::add;
     pub use crate::fns::constrained_ops::assert_is_not_equal;
     pub use crate::fns::constrained_ops::assert_is_not_zero;
-    pub use crate::fns::constrained_ops::assert_is_not_zero_integer;
     pub use crate::fns::constrained_ops::cmp;
     pub use crate::fns::constrained_ops::derive_from_seed;
     pub use crate::fns::constrained_ops::div;
@@ -30,10 +29,8 @@ pub mod internal {
     pub use crate::fns::constrained_ops::eq;
     pub use crate::fns::constrained_ops::from_field;
     pub use crate::fns::constrained_ops::is_zero;
-    pub use crate::fns::constrained_ops::is_zero_integer;
     pub use crate::fns::constrained_ops::mul;
     pub use crate::fns::constrained_ops::rem;
-    pub use crate::fns::constrained_ops::sqr;
     pub use crate::fns::constrained_ops::sub;
     pub use crate::fns::constrained_ops::validate_in_range;
 
@@ -45,7 +42,6 @@ pub mod internal {
     pub use crate::fns::unconstrained_ops::__is_zero;
     pub use crate::fns::unconstrained_ops::__mul;
     pub use crate::fns::unconstrained_ops::__pow;
-    pub use crate::fns::unconstrained_ops::__sqr;
     pub use crate::fns::unconstrained_ops::__sub;
 
     // Serialization functions
