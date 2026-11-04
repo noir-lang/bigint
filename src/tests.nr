@@ -967,6 +967,33 @@ fn test_mul_u512() {
     test_mul::<5, crate::types::U512::U512>();
 }
 
+// ------------------------------ DIVISION BY ZERO TESTS ------------------------------
+
+#[test(should_fail_with = "attempt to divide by zero")]
+fn test_udiv_mod_by_zero() {
+    let _ = U256::from(7).udiv_mod(&U256::zero());
+}
+
+#[test(should_fail_with = "attempt to divide by zero")]
+fn test_div_by_zero() {
+    let _ = U256::from(7) / U256::zero();
+}
+
+#[test(should_fail_with = "attempt to divide by zero")]
+fn test_umod_by_zero() {
+    let _ = U256::from(7).umod(&U256::zero());
+}
+
+#[test(should_fail_with = "attempt to divide by zero")]
+unconstrained fn test_unconstrained_udiv_mod_by_zero() {
+    let _ = U256::from(7).__udiv_mod(&U256::zero());
+}
+
+#[test(should_fail_with = "attempt to divide by zero")]
+unconstrained fn test_unconstrained_div_by_zero() {
+    let _ = U256::from(7).__div(&U256::zero());
+}
+
 // ------------------------------ EXPRESSIONS TESTS ------------------------------
 
 #[test]
