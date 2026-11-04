@@ -168,7 +168,7 @@ The combination of `NUM_PRODUCTS`, `LHS_N` and `RHS_N` must be small enough that
 
 ## Benchmarks
 
-Gate counts and Brillig bytecode sizes for the exported benchmark functions in [`src/benchmarks/`](./src/benchmarks/) are tracked in CI. To generate them locally:
+Gate counts and Brillig bytecode sizes for the exported benchmark functions in [`src/benchmarks.nr`](./src/benchmarks.nr) are tracked in CI. To generate them locally:
 
 ```bash
 nargo export
