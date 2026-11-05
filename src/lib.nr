@@ -25,7 +25,6 @@ pub mod internal {
     pub use crate::fns::constrained_ops::add;
     pub use crate::fns::constrained_ops::assert_is_not_equal;
     pub use crate::fns::constrained_ops::cmp;
-    pub use crate::fns::constrained_ops::derive_from_seed;
     pub use crate::fns::constrained_ops::div;
     pub use crate::fns::constrained_ops::div_rem;
     pub use crate::fns::constrained_ops::eq;
@@ -38,7 +37,6 @@ pub mod internal {
 
     // Unconstrained operations
     pub use crate::fns::unconstrained_ops::__add;
-    pub use crate::fns::unconstrained_ops::__derive_from_seed;
     pub use crate::fns::unconstrained_ops::__div_rem;
     pub use crate::fns::unconstrained_ops::__eq;
     pub use crate::fns::unconstrained_ops::__is_zero;

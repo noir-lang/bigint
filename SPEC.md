@@ -48,9 +48,6 @@ Every shipped type has `BITS >= 254`, so `2^BITS > p`.
 | `set_limb(i, v)` | sets `limbs[i] = v` | `i >= N`, or `v >= 2^120` (`i < N - 1`) or `v >= 2^TOP` (`i = N - 1`) |
 | `set_limb_unsafe(i, v)` | sets `limbs[i] = v`, unchecked | `i >= N` |
 | `validate_in_range()` | nothing | the value is not canonical |
-| `derive_from_seed(seed)`, `__derive_from_seed(seed)` | a pseudorandom canonical value | `seed` has 256 or more bytes |
-
-`derive_from_seed` is a deterministic, public function of `seed`, built from Poseidon2. Its output should be close to uniform over `[0, 2^BITS)`. It is intended for testing, and must not be used where the seed is secret or guessable. The constrained and unconstrained versions return the same value.
 
 ## Conversions
 
@@ -154,6 +151,29 @@ pub unconstrained fn compute_quadratic_expression<T: BigInt, ...>(/* as above */
 
 Returns `(q, r)`, where `r = E mod 2^BITS` is canonical. `q` is the quotient `floor(E' / 2^BITS)`, where `E'` is `E` with every negated term `x` replaced by `2^(BITS + 1) - x`. `q` is not range-checked and may not be a valid value of `T`. See [consistency review](#consistency-review), item 5.
 
+## Internal functions
+
+These functions are not part of the public API, but other parts of the library, its tests or its benchmarks rely on their behaviour.
+
+### `derive_from_seed`
+
+```rust
+pub fn derive_from_seed<let N: u32, let BITS: u32, let SeedBytes: u32>(seed: [u8; SeedBytes]) -> [u128; N]
+```
+
+In `src/fns/constrained_ops.nr`. Returns the canonical limbs of a pseudorandom value in `[0, 2^BITS)`, which is a fixed function of `seed`:
+
+1. The seed bytes, followed by one byte holding `SeedBytes`, are packed big-endian into `Field`s of 31 bytes each. The length byte separates seeds which differ only in leading zero bytes.
+2. The packed `Field`s are hashed with Poseidon2 to a single `Field` `h`.
+3. For `i` in `0..ceil(N / 2)`, the low 240 bits of `Poseidon2([h, i])` give two 120-bit limbs, the lower bits first.
+4. The first `N - 1` limbs are used as they are. The top limb is truncated to its low `TOP` bits.
+
+It fails if `SeedBytes >= 256`.
+
+Every step is constrained: the hash uses the Poseidon2 permutation, `Field`s are split into 128-bit halves with `std::field::bn254::decompose` (which constrains the decomposition to be canonical), and the remaining bit splits are range-checked and recomposed. So a prover cannot choose the output for a given seed. In unconstrained execution the function returns the same value.
+
+The output is close to, but not exactly, uniform: the low 240 bits of a uniform `Field` are biased by a relative factor of up to about `2^-13.6`, as `p` is not a power of two. It is intended for testing. As the output is publicly computable from the seed, it must not be used where the seed is secret or guessable, and if the seed is a private input the prover can choose the output by choosing the seed.
+
 ## Canonical inputs
 
 Every function falls into one of four classes for unchecked inputs:
@@ -217,6 +237,4 @@ Known inconsistencies on `main`, and the open pull requests which address them.
 5. **`compute_quadratic_expression` returns a quotient which includes internal offsets.** When any flag is set, `q` is not the quotient of `E` by `2^BITS`, and it may not be a valid value of `T`. #8 changes the function to return the value of the expression instead.
 6. **Documentation drift.** These comments disagree with the code:
    - The `BigInt` trait documentation says single-limb types "may produce incorrect results"; `derive_bigint` rejects them at compile time.
-   - `derive_from_seed` says it derives `BITS * 2` bits and reduces modulo `MOD`. It truncates hash output to `BITS` bits.
    - `compute_linear_expressions` refers to a test, `test_evaluate_quadratic_expression_limb_overflow`, which does not exist.
-   - The 256-byte limit on `derive_from_seed` seeds is not documented on the trait.
