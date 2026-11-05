@@ -149,6 +149,29 @@ pub unconstrained fn compute_quadratic_expression<T: BigInt, ...>(/* as above */
 
 Returns `(q, r)`, where `r = E mod 2^BITS` is canonical. `q` is the quotient `floor(E' / 2^BITS)`, where `E'` is `E` with every negated term `x` replaced by `2^(BITS + 1) - x`. `q` is not range-checked and may not be a valid value of `T`. See [consistency review](#consistency-review), item 5.
 
+## Internal functions
+
+These functions are not part of the public API, but other parts of the library, its tests or its benchmarks rely on their behaviour.
+
+### `derive_from_seed`
+
+```rust
+pub fn derive_from_seed<let N: u32, let BITS: u32, let SeedBytes: u32>(seed: [u8; SeedBytes]) -> [u128; N]
+```
+
+In `src/fns/constrained_ops.nr`. Returns the canonical limbs of a pseudorandom value in `[0, 2^BITS)`, which is a fixed function of `seed`:
+
+1. The seed bytes, followed by one byte holding `SeedBytes`, are packed big-endian into `Field`s of 31 bytes each. The length byte separates seeds which differ only in leading zero bytes.
+2. The packed `Field`s are hashed with Poseidon2 to a single `Field` `h`.
+3. For `i` in `0..ceil(N / 2)`, the low 240 bits of `Poseidon2([h, i])` give two 120-bit limbs, the lower bits first.
+4. The first `N - 1` limbs are used as they are. The top limb is truncated to its low `TOP` bits.
+
+It fails if `SeedBytes >= 256`.
+
+Every step is constrained: the hash uses the Poseidon2 permutation, `Field`s are split into 128-bit halves with `std::field::bn254::decompose` (which constrains the decomposition to be canonical), and the remaining bit splits are range-checked and recomposed. So a prover cannot choose the output for a given seed. In unconstrained execution the function returns the same value.
+
+The output is close to, but not exactly, uniform: the low 240 bits of a uniform `Field` are biased by a relative factor of up to about `2^-13.6`, as `p` is not a power of two. It is intended for testing. As the output is publicly computable from the seed, it must not be used where the seed is secret or guessable, and if the seed is a private input the prover can choose the output by choosing the seed.
+
 ## Canonical inputs
 
 Every function falls into one of four classes for unchecked inputs:

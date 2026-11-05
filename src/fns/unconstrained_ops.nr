@@ -1,26 +1,11 @@
 // This file contains the unconstrained operations that are used directly by BigInt class
 
-use crate::fns::constrained_ops::derive_from_seed;
-
 use crate::fns::unconstrained_helpers::{
     __get_bit, __get_msb, __helper_add, __helper_mul, __helper_sub, __increment, __one, __reduce,
     __shl, __shr1,
 };
 
 use crate::constants::TWO_POW_120;
-
-// ------------------------------ DERIVATION FUNCTIONS ------------------------------
-
-/// Deterministically derives a `BigInt` from a seed value (unconstrained)
-///
-/// Takes a seed byte array and generates a `BigInt` in the range [0, 2^BITS).
-///
-/// See more information in `constrained_ops.nr`: `derive_from_seed`
-pub unconstrained fn __derive_from_seed<let N: u32, let BITS: u32, let SeedBytes: u32>(
-    seed: [u8; SeedBytes],
-) -> [u128; N] {
-    derive_from_seed::<N, BITS, SeedBytes>(seed)
-}
 
 // ------------------------------ COMPARISON FUNCTIONS ------------------------------
 

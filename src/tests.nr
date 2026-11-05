@@ -240,25 +240,25 @@ fn test_set_limb_U256() {
 
 // ------------------------------ DERIVATION TESTS ------------------------------
 
-// Derives a pseudorandom value of type `BN` from `seed`, using `internal::derive_from_seed`.
+// Derives a pseudorandom value of type `BN` from `seed`, using `fns::constrained_ops::derive_from_seed`.
 fn derive_from_seed<BN, let SeedBytes: u32>(seed: [u8; SeedBytes]) -> BN
 where
     BN: BigInt,
 {
     BN::from_limbs(
-        crate::internal::derive_from_seed::<<BN as BigInt>::N, <BN as BigInt>::BITS, SeedBytes>(
+        crate::fns::constrained_ops::derive_from_seed::<<BN as BigInt>::N, <BN as BigInt>::BITS, SeedBytes>(
             seed,
         ),
     )
 }
 
-// Unconstrained version of `derive_from_seed`.
+// `derive_from_seed`, executed as unconstrained code.
 unconstrained fn __derive_from_seed<BN, let SeedBytes: u32>(seed: [u8; SeedBytes]) -> BN
 where
     BN: BigInt,
 {
     BN::from_limbs_unsafe(
-        crate::internal::__derive_from_seed::<<BN as BigInt>::N, <BN as BigInt>::BITS, SeedBytes>(
+        crate::fns::constrained_ops::derive_from_seed::<<BN as BigInt>::N, <BN as BigInt>::BITS, SeedBytes>(
             seed,
         ),
     )
