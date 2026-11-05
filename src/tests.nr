@@ -142,7 +142,7 @@ fn test_evaluate_quadratic_expression_rejects_wrapped_difference() {
     );
 }
 
-// The `udiv_mod` relation is exact, so the quotient cannot hide an extra `2^BITS`
+// The `div_rem` relation is exact, so the quotient cannot hide an extra `2^BITS`
 #[test(should_fail)]
 fn test_div_rem_extra_modulus_regression(xseed: [u8; 1], yseed: [u8; 2]) {
     let x: U256 = U256::derive_from_seed(xseed);
