@@ -279,11 +279,6 @@ pub fn is_zero_integer<let N: u32>(val: &[u128; N]) -> bool {
     limb_sum == 0
 }
 
-/// Validate that a `BigInt` value is not zero.
-pub fn assert_is_not_zero<let N: u32, let BITS: u32>(val: &[u128; N]) {
-    assert_is_not_zero_integer(val);
-}
-
 /// Check whether a `BigInt` value is zero.
 pub fn is_zero<let N: u32, let BITS: u32>(val: &[u128; N]) -> bool {
     is_zero_integer(val)
