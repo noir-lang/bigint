@@ -32,7 +32,9 @@ pub(crate) unconstrained fn get_msb(x: u128) -> u32 {
 }
 
 mod tests {
-    use crate::constants::{TWO_POW_120, TWO_POW_60};
+    use crate::constants::TWO_POW_120;
+
+    global TWO_POW_60: u128 = 0x1000000000000000;
     use crate::fns::unconstrained_helpers::__get_msb;
     use super::get_msb as get_msb128;
     use std::ops::WrappingMul;

@@ -155,13 +155,12 @@ pub unconstrained fn __pow<let N: u32, let BITS: u32>(
 ///   2. numerator % divisor = remainder
 ///   3. divisor * quotient + remainder = numerator
 ///
-/// ## Note
-/// The divisor must be nonzero
-/// No explicit assertion is made, as this condition is validated during evaluation
+/// Fails if the divisor is zero.
 pub unconstrained fn __udiv_mod<let N: u32>(
     numerator: &[u128; N],
     divisor: &[u128; N],
 ) -> ([u128; N], [u128; N]) {
+    assert(!__is_zero(divisor), "attempt to divide by zero");
     let mut quotient: [u128; N] = [0; N];
     let mut remainder: [u128; N] = *numerator;
     let b: [u128; N] = *divisor;
