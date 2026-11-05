@@ -169,6 +169,15 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
     /// No constraints are generated. Constrain the result using `evaluate_quadratic_expression`.
     unconstrained fn __sqr(&self) -> Self;
 
+    /// Unconstrained unsigned integer division: computes `floor(self / other)`.
+    ///
+    /// # Requirements
+    /// - `other` must not be zero
+    ///
+    /// # Safety
+    /// No constraints are generated. Constrain the result using `evaluate_quadratic_expression`.
+    unconstrained fn __div(&self, other: &Self) -> Self;
+
     /// Unconstrained integer division with remainder.
     ///
     /// Returns `(quotient, remainder)` where `self == quotient * divisor + remainder`
@@ -389,6 +398,10 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
 
             unconstrained fn __sqr(&self) -> Self {
                 Self {limbs: $crate::internal::__sqr::<$N, $BITS>(&self.get_limbs()) }
+            }
+
+            unconstrained fn __div(&self, divisor: &Self) -> Self {
+                Self { limbs: $crate::internal::__div_rem(&self.get_limbs(), &divisor.get_limbs()).0 }
             }
 
             unconstrained fn __div_rem(&self, divisor: &Self) -> (Self, Self) {

@@ -1029,6 +1029,11 @@ unconstrained fn test_unconstrained_div_rem_by_zero() {
 }
 
 #[test(should_fail_with = "attempt to divide by zero")]
+unconstrained fn test_unconstrained_div_by_zero() {
+    let _ = U256::from(7).__div(&U256::zero());
+}
+
+#[test(should_fail_with = "attempt to divide by zero")]
 unconstrained fn test_div_by_zero_unconstrained() {
     let _ = U256::from(7) / U256::zero();
 }

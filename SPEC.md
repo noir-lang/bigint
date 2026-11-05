@@ -104,6 +104,7 @@ Functions prefixed with `__` generate no constraints. For canonical inputs they 
 | --- | --- | --- |
 | `__add(b)`, `__sub(b)`, `__mul(b)`, `__sqr()` | as `+`, `-`, `*`, `sqr` | never, for canonical inputs |
 | `__div_rem(b)` | as `div_rem` | `b == 0` (`attempt to divide by zero`) |
+| `__div(b)` | as `/` | `b == 0` (`attempt to divide by zero`) |
 | `__pow(e)` | `a^e mod 2^BITS`, with `0^0 = 1` | never, for canonical inputs |
 | `__eq(b)` | limb-wise equality | never |
 | `__is_zero()` | `true` if every limb is zero | never |
@@ -173,7 +174,7 @@ A function in the last class may return a wrong or non-canonical result. That is
 | `to_be_bytes`, `to_le_bytes` | checks, for widths with `BITS % 8 == 0` | checks, for widths with `BITS % 8 == 0` |
 | `evaluate_quadratic_expression` | checks | checks |
 | `set_limb` | checks the new limb only | checks the new limb only |
-| `__add`, `__sub`, `__mul`, `__sqr`, `__pow`, `__div_rem`, `compute_quadratic_expression` | — | requires but does not check |
+| `__add`, `__sub`, `__mul`, `__sqr`, `__pow`, `__div`, `__div_rem`, `compute_quadratic_expression` | — | requires but does not check |
 | `__eq` | — | requires but does not check (compares limbs, not values) |
 | `__is_zero` | — | correct for any limbs |
 

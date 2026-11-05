@@ -92,7 +92,7 @@ Additional constrained methods:
 
 ### Unconstrained arithmetic
 
-Every arithmetic operation has an unconstrained counterpart prefixed with `__`: `__add`, `__sub`, `__mul`, `__sqr`, `__div_rem`, `__pow`, `__eq`, `__is_zero`.
+Every arithmetic operation has an unconstrained counterpart prefixed with `__`: `__add`, `__sub`, `__mul`, `__sqr`, `__div`, `__div_rem`, `__pow`, `__eq`, `__is_zero`.
 
 These generate no constraints. Their results must be constrained, ideally with `evaluate_quadratic_expression` (see below).
 
