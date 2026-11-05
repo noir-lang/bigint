@@ -56,12 +56,12 @@ Every shipped type has `BITS >= 254`, so `2^BITS > p`.
 
 | Function | Result | Fails if |
 | --- | --- | --- |
-| `From<Field>`: `T::from(x)` | `x` | `x >= 2^BITS` (only possible for `BITS <= 253`) |
+| `From<Field>`: `T::from(x)` | `x` | `x >= 2^BITS` (only possible for `BITS <= 253`). In unconstrained execution this fails with `attempt to convert a Field which does not fit` |
 | `to_field(a)` | `value(a)` as a `Field` | `a` is not canonical, or `value(a) >= p` |
 | `from_be_bytes(bytes)`, `from_le_bytes(bytes)` | the integer encoded by the `(BITS + 7) / 8` bytes | the encoded integer is `>= 2^BITS` |
 | `to_be_bytes(a)`, `to_le_bytes(a)` | the `(BITS + 7) / 8`-byte encoding of `value(a)` | a non-top limb of `a` is `>= 2^120`, or the top limb does not fit in its bytes |
 
-`to_be_bytes` does not range-check the top limb to `TOP` bits, only to the bytes it occupies. For shipped types `BITS % 8 == 0`, so the two coincide. See [consistency review](#consistency-review), item 5.
+`to_be_bytes` does not range-check the top limb to `TOP` bits, only to the bytes it occupies. For shipped types `BITS % 8 == 0`, so the two coincide. See [consistency review](#consistency-review), item 4.
 
 ## Comparisons
 
@@ -116,7 +116,7 @@ Functions prefixed with `__` generate no constraints. For canonical inputs they 
 
 ### Constrained functions in unconstrained code
 
-When called from unconstrained code, `+`, `-`, `*`, `sqr`, `/`, `udiv_mod`, `umod` and `From<Field>` skip their checks and return the unconstrained result. All other functions perform their checks as assertions. The results agree with constrained execution for canonical inputs, but not for unchecked inputs: see [canonical inputs](#canonical-inputs).
+When called from unconstrained code, `+`, `-`, `*`, `sqr`, `/`, `udiv_mod`, `umod` skip their checks and return the unconstrained result. All other functions perform their checks as assertions. The results agree with constrained execution for canonical inputs, but not for unchecked inputs: see [canonical inputs](#canonical-inputs).
 
 ## Quadratic expressions
 
@@ -147,13 +147,13 @@ Because every term is range-checked, a relation such as `x * y - z ≡ 0` determ
 Preconditions:
 
 - **Size bound (compile time).** The parameters `(N, BITS, LHS_N, RHS_N, NUM_PRODUCTS)` must keep every limb of the product below `2^246`, assuming no negated terms. Expressions which may not satisfy this fail to compile with `product limbs may exceed 2^246 at limb k`. As a guide, keep `NUM_PRODUCTS * LHS_N * RHS_N` well below 64. For `N > 65` every expression is rejected, including `NUM_PRODUCTS = LHS_N = RHS_N = 1`.
-- **Completeness.** If the size bound holds and `E ≡ 0 (mod 2^BITS)`, a proof can be generated. The size bound does not account for negated terms, which add `2^(BITS + 1)` per term internally. An expression with many negated terms may therefore satisfy the size bound and still be impossible to prove. See [consistency review](#consistency-review), item 6.
+- **Completeness.** If the size bound holds and `E ≡ 0 (mod 2^BITS)`, a proof can be generated. The size bound does not account for negated terms, which add `2^(BITS + 1)` per term internally. An expression with many negated terms may therefore satisfy the size bound and still be impossible to prove. See [consistency review](#consistency-review), item 5.
 
 ```rust
 pub unconstrained fn compute_quadratic_expression<T: BigInt, ...>(/* as above */) -> (T, T)
 ```
 
-Returns `(q, r)`, where `r = E mod 2^BITS` is canonical. `q` is the quotient `floor(E' / 2^BITS)`, where `E'` is `E` with every negated term `x` replaced by `2^(BITS + 1) - x`. `q` is not range-checked and may not be a valid value of `T`. See [consistency review](#consistency-review), item 7.
+Returns `(q, r)`, where `r = E mod 2^BITS` is canonical. `q` is the quotient `floor(E' / 2^BITS)`, where `E'` is `E` with every negated term `x` replaced by `2^(BITS + 1) - x`. `q` is not range-checked and may not be a valid value of `T`. See [consistency review](#consistency-review), item 6.
 
 ## Canonical inputs
 
@@ -212,11 +212,10 @@ Known inconsistencies on `main`, and the open pull requests which address them.
    - In unconstrained execution, `-`, `*`, `sqr`, `/`, `udiv_mod`, `umod` and the `__` functions other than `__add` require canonical inputs but do not check them, and can return wrong or non-canonical results (e.g. `[2^120, 0, 0] / 1` returns `2^120 - 1`, and `[0, 0, 2^17] - 0` returns `2^257`). In constrained execution the same operators either check or are correct for any limbs. `==` and the comparisons check in both modes. Not addressed.
    - In constrained execution, `+` and `-` do not check their inputs, while every other binary operation does. They never return an incorrect result, but `a + b` may succeed where `a == b` or `a * b` fails, and may also fail for non-canonical inputs whose sum is in range. #20 documents this.
    - `__eq` compares limbs, so it returns `false` for different encodings of the same value, where `==` fails. Not addressed.
-4. **Unconstrained `From<Field>` does not check the width.** For a custom type with `BITS <= 253`, the constrained conversion fails for `x >= 2^BITS`, but the unconstrained one returns non-canonical limbs. Addressed by #16.
-5. **`to_be_bytes` and `to_le_bytes` only range-check the top limb to a byte boundary.** For a custom type with `BITS % 8 != 0`, they can serialize a non-canonical value into bytes which `from_be_bytes` rejects. Addressed by #19.
-6. **The expression size bound ignores negated terms.** The compile-time check bounds the product limbs for unnegated terms only, so it may accept expressions which an honest prover cannot prove. The code comments describe this, but no test covers it. Not addressed.
-7. **`compute_quadratic_expression` returns a quotient which includes internal offsets.** When any flag is set, `q` is not the quotient of `E` by `2^BITS`, and it may not be a valid value of `T`. #8 changes the function to return the value of the expression instead.
-8. **Documentation drift.** These comments disagree with the code:
+4. **`to_be_bytes` and `to_le_bytes` only range-check the top limb to a byte boundary.** For a custom type with `BITS % 8 != 0`, they can serialize a non-canonical value into bytes which `from_be_bytes` rejects. Addressed by #19.
+5. **The expression size bound ignores negated terms.** The compile-time check bounds the product limbs for unnegated terms only, so it may accept expressions which an honest prover cannot prove. The code comments describe this, but no test covers it. Not addressed.
+6. **`compute_quadratic_expression` returns a quotient which includes internal offsets.** When any flag is set, `q` is not the quotient of `E` by `2^BITS`, and it may not be a valid value of `T`. #8 changes the function to return the value of the expression instead.
+7. **Documentation drift.** These comments disagree with the code:
    - The `BigInt` trait documentation says single-limb types "may produce incorrect results"; `derive_bigint` rejects them at compile time.
    - The doc comments of `compute_quadratic_expression` and `evaluate_quadratic_expression` describe `product(lhs_terms[i])`. The code computes a sum, as the README says.
    - `derive_from_seed` says it derives `BITS * 2` bits and reduces modulo `MOD`. It truncates hash output to `BITS` bits.
