@@ -39,7 +39,7 @@ Every shipped type has `BITS >= 254`, so `2^BITS > p`.
 
 | Function | Result | Fails if |
 | --- | --- | --- |
-| `new()`, `zero()`, `Default::default()` | `0` | never |
+| `zero()`, `Default::default()` | `0` | never |
 | `one()` | `1` | never |
 | `from_limbs(limbs)` | the value with these limbs | `limbs` is not canonical |
 | `from_limbs_unsafe(limbs)` | the value with these limbs, unchecked | never |
@@ -86,7 +86,6 @@ All arithmetic is **wrapping**: results are reduced modulo `2^BITS`. Every resul
 | `a + b` | `(value(a) + value(b)) mod 2^BITS` | no valid witness exists (only possible for unchecked inputs) | no |
 | `a - b` | `(value(a) - value(b)) mod 2^BITS` | no valid witness exists (only possible for unchecked inputs) | no |
 | `a * b` | `(a * b) mod 2^BITS` | an input is not canonical, or `N > 65` (compile time) | yes |
-| `a.sqr()` | `(a * a) mod 2^BITS` | as `*` | yes |
 | `a.div_rem(b)` | `(floor(a / b), a mod b)` | `b == 0`, an input is not canonical, or `N > 65` (compile time) | yes |
 | `a / b` | `floor(a / b)` | as `div_rem` | yes |
 | `a % b` | `a mod b` | as `div_rem` | yes |
@@ -103,7 +102,7 @@ Functions prefixed with `__` generate no constraints. For canonical inputs they 
 
 | Function | Result | Fails if |
 | --- | --- | --- |
-| `__add(b)`, `__sub(b)`, `__mul(b)`, `__sqr()` | as `+`, `-`, `*`, `sqr` | never, for canonical inputs |
+| `__add(b)`, `__sub(b)`, `__mul(b)` | as `+`, `-`, `*` | never, for canonical inputs |
 | `__div_rem(b)` | as `div_rem` | `b == 0` (`attempt to divide by zero`) |
 | `__div(b)` | as `/` | `b == 0` (`attempt to divide by zero`) |
 | `__pow(e)` | `a^e mod 2^BITS`, with `0^0 = 1` | never, for canonical inputs |
@@ -114,7 +113,7 @@ Functions prefixed with `__` generate no constraints. For canonical inputs they 
 
 ### Constrained functions in unconstrained code
 
-When called from unconstrained code, `+`, `-`, `*`, `sqr`, `/`, `%`, `div_rem` skip their checks and return the unconstrained result. All other functions perform their checks as assertions. The results agree with constrained execution for canonical inputs, but not for unchecked inputs: see [canonical inputs](#canonical-inputs).
+When called from unconstrained code, `+`, `-`, `*`, `/`, `%` and `div_rem` skip their checks and return the unconstrained result. All other functions perform their checks as assertions. The results agree with constrained execution for canonical inputs, but not for unchecked inputs: see [canonical inputs](#canonical-inputs).
 
 ## Quadratic expressions
 
@@ -166,7 +165,7 @@ A function in the last class may return a wrong or non-canonical result. That is
 | Function | Constrained execution | Unconstrained execution |
 | --- | --- | --- |
 | `+`, `-` | correct for any limbs (fails if the result cannot be reduced with a single `2^BITS`) | requires but does not check |
-| `*`, `sqr` | checks | requires but does not check |
+| `*` | checks | requires but does not check |
 | `/`, `%`, `div_rem` | checks | requires but does not check |
 | `==`, `!=`, `<`, `<=`, `>`, `>=`, `cmp` | checks | checks |
 | `is_zero`, `assert_is_not_zero` | correct for any limbs | correct for any limbs |
@@ -175,7 +174,7 @@ A function in the last class may return a wrong or non-canonical result. That is
 | `to_be_bytes`, `to_le_bytes` | checks, for widths with `BITS % 8 == 0` | checks, for widths with `BITS % 8 == 0` |
 | `evaluate_quadratic_expression` | checks | checks |
 | `set_limb` | checks the new limb only | checks the new limb only |
-| `__add`, `__sub`, `__mul`, `__sqr`, `__pow`, `__div`, `__div_rem`, `compute_quadratic_expression` | — | requires but does not check |
+| `__add`, `__sub`, `__mul`, `__pow`, `__div`, `__div_rem`, `compute_quadratic_expression` | — | requires but does not check |
 | `__eq` | — | requires but does not check (compares limbs, not values) |
 | `__is_zero` | — | correct for any limbs |
 
@@ -198,10 +197,10 @@ So in constrained execution no function returns a wrong result for unchecked inp
 
 Known inconsistencies on `main`, and the open pull requests which address them.
 
-1. **`U8192` cannot do arithmetic.** `*`, `sqr`, `/`, `%`, `div_rem` and `evaluate_quadratic_expression` all fail to compile for types with `N > 65`, which includes the shipped `U8192`. This is far stricter than for every other shipped type. Addressed by #18.
+1. **`U8192` cannot do arithmetic.** `*`, `/`, `%`, `div_rem` and `evaluate_quadratic_expression` all fail to compile for types with `N > 65`, which includes the shipped `U8192`. This is far stricter than for every other shipped type. Addressed by #18.
 2. **`assert_is_not_equal` has a stricter precondition than `!=`.** For every shipped type (`BITS >= 254`) it fails for distinct values congruent modulo `p`, whereas `assert(a != b)` does not. An honest prover with such values cannot produce a proof. Not addressed.
 3. **Canonical-input handling differs between functions and between execution modes** (see [canonical inputs](#canonical-inputs)):
-   - In unconstrained execution, `+`, `-`, `*`, `sqr`, `/`, `%`, `div_rem` and the `__` functions require canonical inputs but do not check them, and can return wrong or non-canonical results (e.g. `[2^120, 0, 0] / 1` returns `2^120 - 1`). In constrained execution the same operators either check or are correct for any limbs. `==` and the comparisons check in both modes. Not addressed.
+   - In unconstrained execution, `+`, `-`, `*`, `/`, `%`, `div_rem` and the `__` functions require canonical inputs but do not check them, and can return wrong or non-canonical results (e.g. `[2^120, 0, 0] / 1` returns `2^120 - 1`). In constrained execution the same operators either check or are correct for any limbs. `==` and the comparisons check in both modes. Not addressed.
    - In constrained execution, `+` and `-` are correct for any limbs, while every other binary operation checks. This is sound, but `a + b` succeeds where `a == b` or `a * b` fails. #20 documents this.
    - `__eq` compares limbs, so it returns `false` for different encodings of the same value, where `==` fails. Not addressed.
 4. **`to_be_bytes` and `to_le_bytes` only range-check the top limb to a byte boundary.** For a custom type with `BITS % 8 != 0`, they can serialize a non-canonical value into bytes which `from_be_bytes` rejects. Addressed by #19.
