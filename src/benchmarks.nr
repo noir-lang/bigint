@@ -135,7 +135,7 @@ comptime fn make_bench(m: Module, typ_path: Quoted) -> Quoted {
 
         #[export]
         fn $derive_from_seed_13_elements_bench_name(a: [u8; 13]) -> $typ {
-            $BigInt::derive_from_seed(a)
+            $BigInt::from_limbs(crate::fns::constrained_ops::derive_from_seed::<$N, $BITS, 13>(a))
         }
 
         // `evaluate_quadratic_expression` bounds `NUM_PRODUCTS * LHS_N * RHS_N` so that

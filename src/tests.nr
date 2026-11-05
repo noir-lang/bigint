@@ -75,8 +75,8 @@ fn test_evaluate_quadratic_expression_add_rejects_hidden_two_pow_bits_fuzz(
     xseed: [u8; 4],
     yseed: [u8; 3],
 ) {
-    let x: U256 = U256::derive_from_seed(xseed);
-    let y: U256 = U256::derive_from_seed(yseed);
+    let x: U256 = derive_from_seed(xseed);
+    let y: U256 = derive_from_seed(yseed);
 
     let modulus: [u128; 3] = two_pow_bits::<3, 256>();
 
@@ -151,8 +151,8 @@ fn test_evaluate_quadratic_expression_rejects_wrapped_difference() {
 // The `div_rem` relation is exact, so the quotient cannot hide an extra `2^BITS`
 #[test(should_fail)]
 fn test_div_rem_rejects_hidden_two_pow_bits(xseed: [u8; 1], yseed: [u8; 2]) {
-    let x: U256 = U256::derive_from_seed(xseed);
-    let y: U256 = U256::derive_from_seed(yseed);
+    let x: U256 = derive_from_seed(xseed);
+    let y: U256 = derive_from_seed(yseed);
 
     let modulus: [u128; 3] = two_pow_bits::<3, 256>();
 
@@ -169,8 +169,8 @@ fn test_div_rem_rejects_hidden_two_pow_bits(xseed: [u8; 1], yseed: [u8; 2]) {
 // This tests that `validate_gt` no longer accepts identical inputs
 #[test(should_fail)]
 fn test_validate_gt_regression_U256() {
-    let x: U256 = U256::derive_from_seed([1, 2, 3, 4]);
-    let y: U256 = U256::derive_from_seed([1, 2, 3, 4]);
+    let x: U256 = derive_from_seed([1, 2, 3, 4]);
+    let y: U256 = derive_from_seed([1, 2, 3, 4]);
     let x_limbs = x.get_limbs();
     let y_limbs = y.get_limbs();
     validate_gt::<3, 256>(&x_limbs, &y_limbs);
@@ -279,17 +279,41 @@ fn test_set_limb_U256() {
 
 // ------------------------------ DERIVATION TESTS ------------------------------
 
+// Derives a pseudorandom value of type `BN` from `seed`, using `fns::constrained_ops::derive_from_seed`.
+fn derive_from_seed<BN, let SeedBytes: u32>(seed: [u8; SeedBytes]) -> BN
+where
+    BN: BigInt,
+{
+    BN::from_limbs(
+        crate::fns::constrained_ops::derive_from_seed::<<BN as BigInt>::N, <BN as BigInt>::BITS, SeedBytes>(
+            seed,
+        ),
+    )
+}
+
+// `derive_from_seed`, executed as unconstrained code.
+unconstrained fn __derive_from_seed<BN, let SeedBytes: u32>(seed: [u8; SeedBytes]) -> BN
+where
+    BN: BigInt,
+{
+    BN::from_limbs_unsafe(
+        crate::fns::constrained_ops::derive_from_seed::<<BN as BigInt>::N, <BN as BigInt>::BITS, SeedBytes>(
+            seed,
+        ),
+    )
+}
+
 #[test]
 fn test_derive_from_seed() {
     let seed: [u8; 4] = [1, 2, 3, 4];
-    let result_bn: U256 = BigInt::derive_from_seed(seed);
+    let result_bn: U256 = derive_from_seed(seed);
     result_bn.validate_in_range();
 }
 
 #[test]
 fn test_validate_derive_from_seed() {
     let seed: [u8; 4] = [1, 2, 3, 4];
-    let result_bn: U256 = U256::derive_from_seed(seed);
+    let result_bn: U256 = derive_from_seed(seed);
     assert(result_bn.get_limb(0) == 0xfd2a2cad9bdafe1cf39def3d71793a);
     assert(result_bn.get_limb(1) == 0xb2b0e456e76ec08043511c2c398ef6);
     assert(result_bn.get_limb(2) == 0x000000000000000000000000009093);
@@ -303,9 +327,9 @@ fn test_derive_from_seed_masks_top_limb() {
     let mut max_top_limb: u128 = 0;
     for i in 0..32 {
         let seed: [u8; 2] = [i as u8, 7];
-        let a: U252 = U252::derive_from_seed(seed);
+        let a: U252 = derive_from_seed(seed);
         // Safety: test code
-        let b: U252 = unsafe { U252::__derive_from_seed(seed) };
+        let b: U252 = unsafe { __derive_from_seed(seed) };
         assert(a == b);
         if a.get_limb(2) > max_top_limb {
             max_top_limb = a.get_limb(2);
@@ -505,7 +529,7 @@ fn test_widening_conversions() {
     assert(wide.get_limbs() == [TWO_POW_120 - 1, TWO_POW_120 - 1, 0xffff, 0, 0]);
 
     // Converting directly and via intermediate widths agree
-    let a: U256 = U256::derive_from_seed([1, 2, 3, 4]);
+    let a: U256 = derive_from_seed([1, 2, 3, 4]);
     let direct: U8192 = U8192::from(a);
     let chained: U8192 = U8192::from(U4096::from(U2048::from(U1024::from(U512::from(a)))));
     assert(direct == chained);
@@ -652,7 +676,7 @@ fn test_to_field_bits_below_254() {
 
 #[test]
 fn fuzz_to_from_field_bits_below_254(seed: [u8; 5]) {
-    let a: U252 = U252::derive_from_seed(seed);
+    let a: U252 = derive_from_seed(seed);
     let b: Field = to_field(a);
     let c: U252 = U252::from(b);
     assert_eq(a, c);
@@ -660,7 +684,7 @@ fn fuzz_to_from_field_bits_below_254(seed: [u8; 5]) {
 
 #[test]
 fn fuzz_from_le_bytes(seed: [u8; 5]) {
-    let a: U256 = U256::derive_from_seed(seed);
+    let a: U256 = derive_from_seed(seed);
     let bytes: [u8; 32] = a.to_le_bytes();
     let b: U256 = U256::from_le_bytes(bytes);
     assert(a == b);
@@ -668,7 +692,7 @@ fn fuzz_from_le_bytes(seed: [u8; 5]) {
 
 #[test]
 fn fuzz_to_be_bytes(seed: [u8; 5]) {
-    let a: U256 = U256::derive_from_seed(seed);
+    let a: U256 = derive_from_seed(seed);
     let bytes: [u8; 32] = a.to_be_bytes();
     let b: U256 = U256::from_be_bytes(bytes);
     assert(a == b);
@@ -762,9 +786,9 @@ fn test_eq<let N: u32, BN>()
 where
     BN: BigInt,
 {
-    let a: BN = BN::derive_from_seed([1, 2, 3, 4]);
-    let b: BN = BN::derive_from_seed([1, 2, 3, 4]);
-    let c: BN = BN::derive_from_seed([2, 2, 3, 4]);
+    let a: BN = derive_from_seed([1, 2, 3, 4]);
+    let b: BN = derive_from_seed([1, 2, 3, 4]);
+    let c: BN = derive_from_seed([2, 2, 3, 4]);
 
     assert(a.eq(b) == true);
     assert(c.eq(b) == false);
@@ -778,7 +802,7 @@ where
     let zero: BN = BN::zero();
     assert(zero.is_zero() == true);
 
-    let a: BN = BN::derive_from_seed([1, 2, 3, 4]);
+    let a: BN = derive_from_seed([1, 2, 3, 4]);
     assert(a.is_zero() == false);
     assert(!a.is_zero());
 }
@@ -787,8 +811,8 @@ fn test_assert_is_not_equal<let N: u32, BN>()
 where
     BN: BigInt,
 {
-    let a: BN = BN::derive_from_seed([1, 2, 3, 4]);
-    let b: BN = BN::derive_from_seed([4, 5, 6, 7]);
+    let a: BN = derive_from_seed([1, 2, 3, 4]);
+    let b: BN = derive_from_seed([4, 5, 6, 7]);
 
     a.assert_is_not_equal(&b);
 }
@@ -797,8 +821,8 @@ fn test_assert_is_not_equal_fail<let N: u32, BN>()
 where
     BN: BigInt,
 {
-    let a: BN = BN::derive_from_seed([1, 2, 3, 4]);
-    let b: BN = BN::derive_from_seed([1, 2, 3, 4]);
+    let a: BN = derive_from_seed([1, 2, 3, 4]);
+    let b: BN = derive_from_seed([1, 2, 3, 4]);
 
     a.assert_is_not_equal(&b);
 }
@@ -849,7 +873,7 @@ fn test_cmp_gt_U256_fail() {
 
 #[test]
 fn test_cmp_U256_fuzz(seed: [u8; 5]) {
-    let mut a: U256 = U256::derive_from_seed(seed);
+    let mut a: U256 = derive_from_seed(seed);
     let modulus_sub_1_div_2: U256 = U256::from_limbs(U256_MAX) / U256::from(2);
 
     a = if a > modulus_sub_1_div_2 {
@@ -862,16 +886,16 @@ fn test_cmp_U256_fuzz(seed: [u8; 5]) {
 
 #[test]
 fn test_cmp_equal() {
-    let a: U256 = U256::derive_from_seed([1, 2, 3]);
-    let b: U256 = U256::derive_from_seed([1, 2, 3]);
+    let a: U256 = derive_from_seed([1, 2, 3]);
+    let b: U256 = derive_from_seed([1, 2, 3]);
     let c: bool = a < b;
     assert(c == false);
 }
 
 #[test]
 fn fuzz_cmp_equal(seed: [u8; 5]) {
-    let a: U256 = U256::derive_from_seed(seed);
-    let b: U256 = U256::derive_from_seed(seed);
+    let a: U256 = derive_from_seed(seed);
+    let b: U256 = derive_from_seed(seed);
     let c: bool = a < b;
     assert(c == false);
 }
@@ -897,7 +921,7 @@ fn small_from_seed<BN, let SeedBytes: u32>(seed: [u8; SeedBytes]) -> BN
 where
     BN: BigInt,
 {
-    let mut value: BN = BN::derive_from_seed(seed);
+    let mut value: BN = derive_from_seed(seed);
     for i in (<BN as BigInt>::N - 1) / 2..<BN as BigInt>::N {
         value.set_limb(i, 0);
     }
@@ -1192,9 +1216,9 @@ fn test_rem_U256() {
 
 #[test]
 fn test_div_rem_consistency_U2048() {
-    let a: U2048 = U2048::derive_from_seed([1, 2, 3, 4]);
+    let a: U2048 = derive_from_seed([1, 2, 3, 4]);
     // Clear the upper limbs so that the quotient is non-trivial
-    let mut b: U2048 = U2048::derive_from_seed([5, 6, 7, 8]);
+    let mut b: U2048 = derive_from_seed([5, 6, 7, 8]);
     for i in 9..18 {
         b.set_limb(i, 0);
     }
