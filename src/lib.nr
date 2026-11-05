@@ -5,6 +5,9 @@ mod constants;
 // Pre-defined `BigInt`s for people to use:
 pub mod types;
 
+// Widening conversions between the pre-defined `BigInt`s
+mod conversions;
+
 // Free functions and other utils, called by the BigInt structs
 pub(crate) mod fns;
 pub(crate) mod utils;
@@ -19,32 +22,27 @@ pub mod internal {
     // Constrained operations
     pub use crate::fns::constrained_ops::add;
     pub use crate::fns::constrained_ops::assert_is_not_equal;
-    pub use crate::fns::constrained_ops::assert_is_not_zero;
-    pub use crate::fns::constrained_ops::assert_is_not_zero_integer;
     pub use crate::fns::constrained_ops::cmp;
     pub use crate::fns::constrained_ops::derive_from_seed;
     pub use crate::fns::constrained_ops::div;
+    pub use crate::fns::constrained_ops::div_rem;
     pub use crate::fns::constrained_ops::eq;
     pub use crate::fns::constrained_ops::from_field;
     pub use crate::fns::constrained_ops::is_zero;
-    pub use crate::fns::constrained_ops::is_zero_integer;
     pub use crate::fns::constrained_ops::mul;
-    pub use crate::fns::constrained_ops::sqr;
+    pub use crate::fns::constrained_ops::rem;
     pub use crate::fns::constrained_ops::sub;
-    pub use crate::fns::constrained_ops::udiv_mod;
-    pub use crate::fns::constrained_ops::umod;
     pub use crate::fns::constrained_ops::validate_in_range;
 
     // Unconstrained operations
     pub use crate::fns::unconstrained_ops::__add;
     pub use crate::fns::unconstrained_ops::__derive_from_seed;
+    pub use crate::fns::unconstrained_ops::__div_rem;
     pub use crate::fns::unconstrained_ops::__eq;
     pub use crate::fns::unconstrained_ops::__is_zero;
     pub use crate::fns::unconstrained_ops::__mul;
     pub use crate::fns::unconstrained_ops::__pow;
-    pub use crate::fns::unconstrained_ops::__sqr;
     pub use crate::fns::unconstrained_ops::__sub;
-    pub use crate::fns::unconstrained_ops::__udiv_mod;
 
     // Serialization functions
     pub use crate::fns::serialization::from_be_bytes;

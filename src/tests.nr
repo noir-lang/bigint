@@ -2,13 +2,18 @@ use crate::bigint::BigInt;
 use crate::bigint::{compute_quadratic_expression, evaluate_quadratic_expression, to_field};
 use crate::bigint::derive_bigint;
 use crate::constants::{GRUMPKIN_MODULUS, TWO_POW_120, TWO_POW_240};
-use crate::fns::constrained_ops::{from_field, validate_gt};
+use crate::fns::constrained_ops::{
+    assert_add_no_overflow, assert_sub_no_overflow, from_field, validate_gt,
+};
 use crate::fns::expressions::{assert_product_limbs_fit_in_246_bits, validate_mul_add_expression};
 use crate::fns::unconstrained_helpers::__helper_add;
 
+use crate::types::U1024::U1024;
 use crate::types::U2048::U2048;
 use crate::types::U256::U256;
+use crate::types::U4096::U4096;
 use crate::types::U512::U512;
+use crate::types::U8192::U8192;
 
 // Test-only unsigned integer types. Every shipped type is at least 256 bits wide, but some code
 // paths only apply to narrower widths:
@@ -20,6 +25,7 @@ use crate::types::U512::U512;
 // - `U253`: the widest type whose values always fit within the native field, as `2^253` is the
 //   largest power of two below the Grumpkin modulus. It covers `from_field` relying on the range
 //   check alone at that boundary.
+// - `U125`: a type narrower than `u128`, so `From<u128>` must reject values which do not fit.
 
 // A 252-bit unsigned integer
 #[derive_bigint(252)]
@@ -38,6 +44,12 @@ fn two_pow_bits<let N: u32, let BITS: u32>() -> [u128; N] {
     let mut limbs: [u128; N] = [0; N];
     limbs[N - 1] = 1 << ((BITS - (N - 1) * 120) as u128);
     limbs
+}
+
+// A 125-bit unsigned integer, narrower than `u128`
+#[derive_bigint(125)]
+pub struct U125 {
+    limbs: [u128; 2],
 }
 
 // 2^256 - 1
@@ -132,14 +144,14 @@ fn test_evaluate_quadratic_expression_rejects_wrapped_difference() {
 
 // The `udiv_mod` relation is exact, so the quotient cannot hide an extra `2^BITS`
 #[test(should_fail)]
-fn test_udiv_mod_extra_modulus_regression(xseed: [u8; 1], yseed: [u8; 2]) {
+fn test_div_rem_extra_modulus_regression(xseed: [u8; 1], yseed: [u8; 2]) {
     let x: U256 = U256::derive_from_seed(xseed);
     let y: U256 = U256::derive_from_seed(yseed);
 
     let modulus: [u128; 3] = two_pow_bits::<3, 256>();
 
     // Safety: test code
-    let (q, r): (U256, U256) = unsafe { x.__udiv_mod(&y) };
+    let (q, r): (U256, U256) = unsafe { x.__div_rem(&y) };
 
     let mut q_: [u128; 3] = q.get_limbs();
     // Safety: test code
@@ -164,7 +176,7 @@ fn test_validate_gt_regression_U256() {
 // therefore sufficient to exercise the check.
 #[test(should_fail_with = "product limbs may exceed 2^246")]
 fn test_evaluate_quadratic_expression_overflow_num_products_U256() {
-    let zero: U256 = BigInt::new();
+    let zero: U256 = BigInt::zero();
     // NUM_PRODUCTS=33, LHS_N=1, RHS_N=1
     // Fails the (N-2)th limb check: 33 * 2 * (2^120-1)^2 > 2^246
     evaluate_quadratic_expression(
@@ -179,7 +191,7 @@ fn test_evaluate_quadratic_expression_overflow_num_products_U256() {
 
 #[test(should_fail_with = "product limbs may exceed 2^246")]
 fn test_evaluate_quadratic_expression_overflow_num_products_U256_2() {
-    let zero: U256 = BigInt::new();
+    let zero: U256 = BigInt::zero();
     // NUM_PRODUCTS=1, LHS_N=6, RHS_N=6
     // Fails the (N-2)th limb check: 1 * 6 * 6 * 2 * (2^120-1)^2 > 2^246
     evaluate_quadratic_expression([[zero; 6]], [[false; 6]], [[zero; 6]], [[false; 6]], [], []);
@@ -240,7 +252,7 @@ fn test_bits_U256() {
 
 #[test]
 fn test_num_limbs_U256() {
-    assert_eq(U256::zero().num_limbs(), 3)
+    assert_eq(<U256 as BigInt>::N, 3)
 }
 
 #[test]
@@ -437,6 +449,84 @@ unconstrained fn test_from_field_unconstrained() {
     assert(U256::from(-1).get_limbs() == from_field::<3, 256>(-1));
 }
 
+// ------------------------------ CONVERSIONS FROM NATIVE INTEGERS ------------------------------
+
+#[test]
+fn test_from_native_integers() {
+    let expected: U256 = U256::from(200);
+    assert(U256::from(200 as u8) == expected);
+    assert(U256::from(200 as u16) == expected);
+    assert(U256::from(200 as u32) == expected);
+    assert(U256::from(200 as u64) == expected);
+    assert(U256::from(200 as u128) == expected);
+
+    let u64_max: u64 = 0xffffffffffffffff;
+    assert(U2048::from(u64_max).get_limb(0) == u64_max as u128);
+
+    // u128::MAX = 2^128 - 1 spans two limbs
+    let u128_max: u128 = 0xffffffffffffffffffffffffffffffff;
+    assert(U256::from(u128_max).get_limbs() == [TWO_POW_120 - 1, 0xff, 0]);
+    assert(
+        U125::from(0x1fffffffffffffffffffffffffffffff as u128).get_limbs()
+            == [TWO_POW_120 - 1, 0x1f],
+    );
+}
+
+#[test]
+unconstrained fn test_from_native_integers_unconstrained() {
+    let u128_max: u128 = 0xffffffffffffffffffffffffffffffff;
+    assert(U256::from(u128_max).get_limbs() == [TWO_POW_120 - 1, 0xff, 0]);
+    assert(U256::from(7 as u64) == U256::from(7));
+}
+
+// A `u128` which does not fit in a 125-bit type is rejected
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_from_u128_overflow() {
+    let _: U125 = U125::from(0x20000000000000000000000000000000 as u128);
+}
+
+#[test(should_fail_with = "attempt to convert a Field which does not fit")]
+unconstrained fn test_from_u128_overflow_unconstrained() {
+    let _: U125 = U125::from(0x20000000000000000000000000000000 as u128);
+}
+
+// ------------------------------ WIDENING CONVERSIONS ------------------------------
+
+#[test]
+fn test_widening_conversions() {
+    let max: U256 = U256::from_limbs(U256_MAX);
+    let wide: U512 = U512::from(max);
+    assert(wide.get_limbs() == [TWO_POW_120 - 1, TWO_POW_120 - 1, 0xffff, 0, 0]);
+
+    // Converting directly and via intermediate widths agree
+    let a: U256 = U256::derive_from_seed([1, 2, 3, 4]);
+    let direct: U8192 = U8192::from(a);
+    let chained: U8192 = U8192::from(U4096::from(U2048::from(U1024::from(U512::from(a)))));
+    assert(direct == chained);
+
+    // `Into` is available through `From`
+    let b: U1024 = a.into();
+    assert(b == U1024::from(a));
+}
+
+// Widening allows computing values which would overflow the narrower type
+#[test]
+fn test_widening_avoids_overflow() {
+    let max: U256 = U256::from_limbs(U256_MAX);
+    let wide: U512 = U512::from(max);
+    // (2^256 - 1)^2 = 2^512 - 2^257 + 1
+    let square: U512 = wide * wide;
+    assert(square.get_limbs()[0] == 1);
+    assert(square / wide == wide);
+}
+
+// Widening an unnormalised value is rejected rather than producing an unnormalised result
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_widening_rejects_unnormalised() {
+    let a: U256 = U256::from_limbs_unsafe([TWO_POW_120, 0, 0]);
+    let _: U512 = U512::from(a);
+}
+
 #[test]
 fn test_to_field_one() {
     let field: Field = 1;
@@ -595,6 +685,20 @@ fn test_from_le_bytes_rejects_out_of_range() {
     let _: U252 = U252::from_le_bytes(bytes);
 }
 
+// Byte conversions must not serialise an unnormalised value as a value `>= 2^BITS`: the top limb
+// of a `U252` holds 12 bits, so `[0, 0, 2^13]` (i.e. 2^253) is rejected.
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_to_be_bytes_rejects_out_of_range() {
+    let a: U252 = U252::from_limbs_unsafe([0, 0, 0x2000]);
+    let _ = a.to_be_bytes();
+}
+
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_to_le_bytes_rejects_out_of_range() {
+    let a: U252 = U252::from_limbs_unsafe([0, 0, 0x2000]);
+    let _ = a.to_le_bytes();
+}
+
 #[test]
 fn test_from_be_bytes_max_U252() {
     let mut bytes: [u8; 32] = [0xff; 32];
@@ -670,7 +774,7 @@ where
 
     let a: BN = BN::derive_from_seed([1, 2, 3, 4]);
     assert(a.is_zero() == false);
-    a.assert_is_not_zero();
+    assert(!a.is_zero());
 }
 
 fn test_assert_is_not_equal<let N: u32, BN>()
@@ -816,7 +920,7 @@ where
     assert_eq(limbs, true_limbs);
 }
 
-#[test(should_fail_with = "call to assert_max_bit_size")]
+#[test(should_fail_with = "attempt to add with overflow")]
 fn test_add_U256_overflow() {
     // (2^256 - 1) + 1 = 2^256 overflows
     let _: U256 = U256::from_limbs(U256_MAX) + U256::one();
@@ -830,6 +934,35 @@ unconstrained fn test_add_U256_overflow_unconstrained() {
 #[test(should_fail_with = "attempt to add with overflow")]
 unconstrained fn test_unconstrained_add_U256_overflow() {
     let _: U256 = U256::from_limbs(U256_MAX).__add(&U256::one());
+}
+
+// The witness hints fail first with a descriptive message, so check the constraints directly: no
+// choice of carry or borrow flags lets an overflowing sum or an underflowing difference through.
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_add_constraints_reject_overflow_honest_flags() {
+    // (2^256 - 1) + 1: the honest flags carry out of every limb
+    let _ = assert_add_no_overflow::<3, 256>(&U256_MAX, &[1, 0, 0], &[true, true]);
+}
+
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_add_constraints_reject_overflow_no_carries() {
+    let _ = assert_add_no_overflow::<3, 256>(&U256_MAX, &[1, 0, 0], &[false, false]);
+}
+
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_add_constraints_reject_overflow_partial_carries() {
+    let _ = assert_add_no_overflow::<3, 256>(&U256_MAX, &[1, 0, 0], &[true, false]);
+}
+
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_sub_constraints_reject_underflow_honest_flags() {
+    // 0 - 1: the honest flags borrow into every limb
+    let _ = assert_sub_no_overflow::<3, 256>(&[0, 0, 0], &[1, 0, 0], &[true, true]);
+}
+
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_sub_constraints_reject_underflow_no_borrows() {
+    let _ = assert_sub_no_overflow::<3, 256>(&[0, 0, 0], &[1, 0, 0], &[false, false]);
 }
 
 #[test]
@@ -851,7 +984,7 @@ fn test_add_U256_carry() {
     assert(c.get_limbs() == [0, 1, 0]);
 }
 
-#[test(should_fail_with = "call to assert_max_bit_size")]
+#[test(should_fail_with = "attempt to subtract with overflow")]
 fn test_sub_U256_underflow() {
     let _: U256 = U256::zero() - U256::one();
 }
@@ -877,7 +1010,7 @@ fn test_sub_U256() {
     assert(c.get_limbs() == [TWO_POW_120 - 1, 0, 0]);
 }
 
-#[test(should_fail_with = "call to assert_max_bit_size")]
+#[test(should_fail_with = "attempt to subtract with overflow")]
 fn test_sub_U2048_underflow() {
     let a: U2048 = small_from_seed([1, 2, 3, 4]);
     let b: U2048 = a + U2048::one();
@@ -895,17 +1028,6 @@ where
     assert(c.eq(d));
 }
 
-fn test_sqr<let N: u32, BN>()
-where
-    BN: BigInt,
-{
-    let a: BN = small_from_seed([1, 2, 3, 4]);
-    let b: BN = small_from_seed([4, 5, 6, 7]);
-    let c: BN = (a + b).sqr();
-    let d: BN = a.sqr() + b.sqr() + (a * b) + (b * a);
-    assert(c == d);
-}
-
 #[test]
 fn test_mul_U256_with_one() {
     let a: U256 = U256::from_limbs([TWO_POW_120 - 2, TWO_POW_120 - 1, 0xffff]);
@@ -914,7 +1036,7 @@ fn test_mul_U256_with_one() {
     assert(c == a);
 }
 
-fn test_div_udiv_mod_equality<let N: u32, BN>()
+fn test_div_div_rem_equality<let N: u32, BN>()
 where
     BN: BigInt,
 {
@@ -924,13 +1046,13 @@ where
     let two: BN = BN::one() + BN::one();
 
     let c: BN = a / two;
-    let (d, _): (BN, BN) = a.udiv_mod(&two);
+    let (d, _): (BN, BN) = a.div_rem(&two);
 
     assert(c == d);
 }
 
 #[test]
-fn test_udiv_mod_U256() {
+fn test_div_rem_U256() {
     let a: U256 = U256::from_limbs([
         0xec0ca0c0adce359af6fcea1a7ab2dc,
         0xdd52c4aa3fde93685d3f7cc285de32,
@@ -938,7 +1060,7 @@ fn test_udiv_mod_U256() {
     ]);
     let b: U256 = U256::from_limbs([12, 0, 0]);
 
-    let (q, r): (U256, U256) = a.udiv_mod(&b);
+    let (q, r): (U256, U256) = a.div_rem(&b);
 
     // Safety: test code
     let product: U256 = unsafe { q.__mul(&b).__add(&r) };
@@ -946,20 +1068,20 @@ fn test_udiv_mod_U256() {
 }
 
 #[test]
-fn test_1_udiv_mod_2() {
+fn test_1_div_rem_2() {
     let _0: U256 = U256::zero();
     let _1: U256 = U256::one();
     let _2: U256 = _1 + _1;
-    assert(_1.udiv_mod(&_2) == (_0, _1));
+    assert(_1.div_rem(&_2) == (_0, _1));
 }
 
 #[test]
-fn test_20_udiv_mod_11() {
+fn test_20_div_rem_11() {
     let _1: U256 = U256::one();
     let _2_POW_120: U256 = U256::from_limbs([0, 1, 0]);
     let _2_POW_121: U256 = U256::from_limbs([0, 2, 0]);
     let divisor: U256 = _2_POW_120 + _1;
-    assert(_2_POW_121.udiv_mod(&divisor) == (_1, _2_POW_120 - _1));
+    assert(_2_POW_121.div_rem(&divisor) == (_1, _2_POW_120 - _1));
 }
 
 //// Set up parametrized tests
@@ -997,13 +1119,8 @@ fn test_mul_U256() {
 }
 
 #[test]
-fn test_sqr_U256() {
-    test_sqr::<3, U256>();
-}
-
-#[test]
-fn test_div_udiv_mod_equality_U256() {
-    test_div_udiv_mod_equality::<3, U256>();
+fn test_div_div_rem_equality_U256() {
+    test_div_div_rem_equality::<3, U256>();
 }
 
 // U2048
@@ -1039,13 +1156,8 @@ fn test_mul_U2048() {
 }
 
 #[test]
-fn test_sqr_U2048() {
-    test_sqr::<18, U2048>();
-}
-
-#[test]
-fn test_div_udiv_mod_equality_U2048() {
-    test_div_udiv_mod_equality::<18, U2048>();
+fn test_div_div_rem_equality_U2048() {
+    test_div_div_rem_equality::<18, U2048>();
 }
 
 // Other
@@ -1065,11 +1177,33 @@ fn test_mul_u512() {
     test_mul::<5, crate::types::U512::U512>();
 }
 
+#[test]
+fn test_rem_U256() {
+    assert(U256::from(20) % U256::from(11) == U256::from(9));
+    assert(U256::from(22) % U256::from(11) == U256::zero());
+    assert(U256::from(3) % U256::from(11) == U256::from(3));
+}
+
+#[test]
+fn test_div_rem_consistency_U2048() {
+    let a: U2048 = U2048::derive_from_seed([1, 2, 3, 4]);
+    // Clear the upper limbs so that the quotient is non-trivial
+    let mut b: U2048 = U2048::derive_from_seed([5, 6, 7, 8]);
+    for i in 9..18 {
+        b.set_limb(i, 0);
+    }
+    let (q, r): (U2048, U2048) = a.div_rem(&b);
+    assert(q == a / b);
+    assert(r == a % b);
+    assert(r < b);
+    assert(q * b + r == a);
+}
+
 // ------------------------------ DIVISION BY ZERO TESTS ------------------------------
 
 #[test(should_fail_with = "attempt to divide by zero")]
-fn test_udiv_mod_by_zero() {
-    let _ = U256::from(7).udiv_mod(&U256::zero());
+fn test_div_rem_by_zero() {
+    let _ = U256::from(7).div_rem(&U256::zero());
 }
 
 #[test(should_fail_with = "attempt to divide by zero")]
@@ -1078,13 +1212,13 @@ fn test_div_by_zero() {
 }
 
 #[test(should_fail_with = "attempt to divide by zero")]
-fn test_umod_by_zero() {
-    let _ = U256::from(7).umod(&U256::zero());
+fn test_rem_by_zero() {
+    let _ = U256::from(7) % U256::zero();
 }
 
 #[test(should_fail_with = "attempt to divide by zero")]
-unconstrained fn test_unconstrained_udiv_mod_by_zero() {
-    let _ = U256::from(7).__udiv_mod(&U256::zero());
+unconstrained fn test_unconstrained_div_rem_by_zero() {
+    let _ = U256::from(7).__div_rem(&U256::zero());
 }
 
 #[test(should_fail_with = "attempt to divide by zero")]
@@ -1157,12 +1291,6 @@ unconstrained fn test_unconstrained_mul_U256_overflow() {
     let _: U256 = a.__mul(&a);
 }
 
-#[test(should_fail_with = "attempt to multiply with overflow")]
-fn test_sqr_U256_overflow() {
-    let a: U256 = U256::from_limbs([0, 0x100, 0]);
-    let _: U256 = a.sqr();
-}
-
 // Even if the prover supplies the wrapped product, the multiplication relation is rejected
 #[test(should_fail)]
 fn test_mul_U256_rejects_wrapped_product() {
@@ -1213,6 +1341,11 @@ unconstrained fn test_compute_quadratic_expression_overflow() {
     let a: U256 = U256::from_limbs([0, 0x100, 0]);
     // a * a = 2^256
     let _: U256 = compute_quadratic_expression([[a]], [[false]], [[a]], [[false]], [], []);
+}
+
+#[test(should_fail_with = "attempt to divide by zero")]
+unconstrained fn test_div_by_zero_unconstrained() {
+    let _ = U256::from(7) / U256::zero();
 }
 
 // ------------------------------ EXPRESSIONS TESTS ------------------------------
