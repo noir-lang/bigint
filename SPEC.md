@@ -57,6 +57,9 @@ Every shipped type has `BITS >= 254`, so `2^BITS > p`.
 | Function | Result | Fails if |
 | --- | --- | --- |
 | `From<Field>`: `T::from(x)` | `x` | `x >= 2^BITS` (only possible for `BITS <= 253`). In unconstrained execution this fails with `attempt to convert a Field which does not fit` |
+| `From<u8>`, `From<u16>`, `From<u32>`, `From<u64>`: `T::from(x)` | `x` | never |
+| `From<u128>`: `T::from(x)` | `x` | as `From<Field>`: `x >= 2^BITS` (only possible for `BITS < 128`) |
+| `From<A> for B`, `a.into()`, for pre-defined types `A` narrower than `B` | `value(a)` | `a` is not canonical |
 | `to_field(a)` | `value(a)` as a `Field` | `a` is not canonical, or `value(a) >= p` |
 | `from_be_bytes(bytes)`, `from_le_bytes(bytes)` | the integer encoded by the `(BITS + 7) / 8` bytes | the encoded integer is `>= 2^BITS` |
 | `to_be_bytes(a)`, `to_le_bytes(a)` | the `(BITS + 7) / 8`-byte encoding of `value(a)` | a non-top limb of `a` is `>= 2^120`, or the top limb does not fit in its bytes |
@@ -172,6 +175,7 @@ A function in the last class may return a wrong or non-canonical result. That is
 | `is_zero`, `assert_is_not_zero` | correct for any limbs | correct for any limbs |
 | `assert_is_not_equal` | correct for any limbs (compares modulo `p`) | correct for any limbs (compares modulo `p`) |
 | `to_field` | checks | checks |
+| `From<A> for B` (widening) | checks | checks |
 | `to_be_bytes`, `to_le_bytes` | checks, for widths with `BITS % 8 == 0` | checks, for widths with `BITS % 8 == 0` |
 | `evaluate_quadratic_expression` | checks | checks |
 | `set_limb` | checks the new limb only | checks the new limb only |
