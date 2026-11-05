@@ -1,11 +1,11 @@
 use crate::constants::{GRUMPKIN_MODULUS, TWO_POW_120, TWO_POW_240};
 
 use crate::fns::{
-    expressions::{evaluate_quadratic_expression, validate_udiv_mod_expression},
+    expressions::{evaluate_quadratic_expression, validate_div_rem_expression},
     unconstrained_helpers::{
         __from_field, compute_add_flags, compute_borrow_flags, compute_gte_flags, compute_sub_flags,
     },
-    unconstrained_ops::{__add, __mul, __sqr, __sub, __udiv_mod},
+    unconstrained_ops::{__add, __div_rem, __mul, __sub},
 };
 
 use crate::fns::modulus::get_modulus;
@@ -235,43 +235,14 @@ pub fn eq<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u128; N]) -> bool {
     *lhs == *rhs
 }
 
-/// Validate that `val` is not equal to zero when interpreted as an integer.
-///
-/// This enforces that at least one limb of `val` is non-zero.
-///
-/// ## Assumptions
-/// * Each limb of `val` is range-constrained to be a 120-bit value:
-///   `0 <= val[i] < 2^120`.
-/// * For our concrete fields and limb counts we have `N * 2^120 < p`,
-///   so the sum of all limbs fits strictly inside the field modulus.
-///
-/// ## Completeness
-/// If `val` is non-zero as an integer, then at least one limb is non-zero,
-/// so the integer sum of the limbs satisfies `0 < limb_sum < p`. In this
-/// case `limb_sum != 0` in the `Field`, and the assertion passes.
-///
-/// ## Soundness
-/// If all limbs of `val` are zero, then `limb_sum` is zero as an integer
-/// and as a field element, so the assertion fails. A witness representing
-/// the zero integer can never satisfy this check.
+/// Check whether a `BigInt` value is zero, i.e. all of its limbs are zero.
 ///
 /// ## Note
-/// This is slightly cheaper than doing `val != [0; N]`, as we avoid
-/// creating per-limb boolean equalities and chaining them with `and`s.
-pub fn assert_is_not_zero_integer<let N: u32>(val: &[u128; N]) {
-    assert(!is_zero_integer(val), "assert_is_not_zero_integer fail");
-}
-
-/// Check whether `val` is the zero `BigInt` in the integer sense.
-///
-/// This returns `true` iff all limbs of `val` are zero.
-///
-/// See `assert_is_not_zero_integer` for the underlying assumptions.
-///
-/// ## Note
-/// This is slightly cheaper than testing `val == [0; N]`, as we avoid
-/// creating per-limb boolean equalities and chaining them with `and`s.
-pub fn is_zero_integer<let N: u32>(val: &[u128; N]) -> bool {
+/// This sums the limbs instead of testing `val == [0; N]`, which avoids creating per-limb boolean
+/// equalities and chaining them with `and`s. As every limb is a `u128`, the sum is below
+/// `N * 2^{128}`, which is far smaller than the circuit field modulus `p`, so the sum is zero in
+/// `Field` exactly when every limb is zero. This holds even if `val` is not normalised.
+pub fn is_zero<let N: u32>(val: &[u128; N]) -> bool {
     let mut limb_sum: Field = 0;
     for i in 0..N {
         limb_sum += val[i].into();
@@ -279,14 +250,11 @@ pub fn is_zero_integer<let N: u32>(val: &[u128; N]) -> bool {
     limb_sum == 0
 }
 
-/// Validate that a `BigInt` value is not zero.
-pub fn assert_is_not_zero<let N: u32, let BITS: u32>(val: &[u128; N]) {
-    assert_is_not_zero_integer(val);
-}
-
-/// Check whether a `BigInt` value is zero.
-pub fn is_zero<let N: u32, let BITS: u32>(val: &[u128; N]) -> bool {
-    is_zero_integer(val)
+/// Validate that a `BigInt` value is not zero, i.e. at least one of its limbs is non-zero.
+///
+/// See `is_zero`.
+pub fn assert_is_not_zero<let N: u32>(val: &[u128; N]) {
+    assert(!is_zero(val), "assert_is_not_zero fail");
 }
 
 /// Validate a `BigInt` instance is correctly range constrained to contain no more than `BITS` bits
@@ -351,7 +319,7 @@ pub(crate) fn validate_quotient_in_range<let N: u32, let BITS: u32>(limbs: &[u12
 /// And won't satisfy the range constraint, since all the limbs are < 2^120
 ///
 /// ## Note
-/// `assert_is_not_zero_integer(result)` is crucial. Without it, we could always provide
+/// `assert_is_not_zero(result)` is crucial. Without it, we could always provide
 /// two identical inputs `x`, `x` and set `borrow_flags = [false; N]`,
 /// which would satisfy the limb constraints.
 pub(crate) fn validate_gt<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u128; N]) {
@@ -364,7 +332,7 @@ pub(crate) fn validate_gt<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u12
     let result: [u128; N] = assert_sub_no_overflow::<N, BITS>(lhs, rhs, &borrow_flags);
 
     // Constrain it to be strict inequality
-    assert_is_not_zero_integer(&result);
+    assert_is_not_zero(&result);
 }
 
 /// Compute the result of lhs - rhs given borrow flags and validate it
@@ -819,55 +787,19 @@ pub fn mul<let N: u32, let BITS: u32>(lhs: [u128; N], rhs: [u128; N]) -> [u128; 
     result
 }
 
-/// Compute the `BigInt` squaring
-///
-/// Computes `result = val * val (mod MOD)` by:
-///   1. Computing `result` out of circuit via `__sqr`.
-///   2. Constraining the quadratic relation `val * val - result = 0` with
-///      `evaluate_quadratic_expression`.
-///
-/// ## Soundness
-/// Soundness reduces to `evaluate_quadratic_expression` for the relation
-/// `val * val - result = 0`
-///
-/// ## Note
-/// When possible, prefer expressing your computation directly as a quadratic
-///   relation and calling `evaluate_quadratic_expression` instead of using `sqr`
-pub fn sqr<let N: u32, let BITS: u32>(val: [u128; N]) -> [u128; N] {
-    // Safety: we constrain the multiplication result immediately after
-    let result: [u128; N] = unsafe { __sqr::<_, BITS>(&val) };
-    if !std::runtime::is_unconstrained() {
-        // val * val - result = 0
-        let lhs_terms: [[[u128; N]; 1]; 1] = [[val]];
-        let lhs_flags: [[bool; 1]; 1] = [[false]];
-        let rhs_terms: [[[u128; N]; 1]; 1] = [[val]];
-        let rhs_flags: [[bool; 1]; 1] = [[false]];
-        let linear_terms: [[u128; N]; 1] = [result];
-        let linear_flags: [bool; 1] = [true];
-        evaluate_quadratic_expression::<N, BITS, 1, 1, 1, 1>(
-            &lhs_terms,
-            &lhs_flags,
-            &rhs_terms,
-            &rhs_flags,
-            &linear_terms,
-            &linear_flags,
-        );
-    }
-    result
-}
-
 /// Compute the `BigInt` integer division with remainder
 ///
 /// Computes `quotient = floor(numerator / divisor)` and
-/// `remainder = numerator % divisor` by:
-///   1. Computing `(quotient, remainder)` out of circuit via `__udiv_mod`.
+/// `remainder = numerator % divisor`, i.e. Euclidean division (which coincides with floored and
+/// truncated division for unsigned integers), by:
+///   1. Computing `(quotient, remainder)` out of circuit via `__div_rem`.
 ///   2. Constraining the quadratic relation
 ///        quotient * divisor + remainder - numerator = 0
-///      with `validate_udiv_mod_expression`.
+///      with `validate_div_rem_expression`.
 ///   3. Enforcing `remainder < divisor`.
 ///
 /// ## Soundness
-/// Soundness reduces to `validate_udiv_mod_expression` for the relation
+/// Soundness reduces to `validate_div_rem_expression` for the relation
 ///     quotient * divisor + remainder - numerator = 0,
 /// together with `remainder < divisor` check enforced via `validate_gt`.
 ///
@@ -880,15 +812,15 @@ pub fn sqr<let N: u32, let BITS: u32>(val: [u128; N]) -> [u128; N] {
 /// ## Note
 /// Enforcing `divisor != 0` is not necessary. `remainder < divisor`
 /// Already enforces this.
-pub fn udiv_mod<let N: u32, let BITS: u32>(
+pub fn div_rem<let N: u32, let BITS: u32>(
     numerator: &[u128; N],
     divisor: &[u128; N],
 ) -> ([u128; N], [u128; N]) {
-    // Safety: We constrain the result of __udiv_mod immediately after
-    let (quotient, remainder): ([u128; N], [u128; N]) = unsafe { __udiv_mod(numerator, divisor) };
+    // Safety: We constrain the result of __div_rem immediately after
+    let (quotient, remainder): ([u128; N], [u128; N]) = unsafe { __div_rem(numerator, divisor) };
     if !std::runtime::is_unconstrained() {
         // quotient * divisor + remainder - numerator = 0
-        validate_udiv_mod_expression::<N, BITS>(numerator, divisor, &quotient, &remainder);
+        validate_div_rem_expression::<N, BITS>(numerator, divisor, &quotient, &remainder);
         // remainder < divisor
         validate_gt::<N, BITS>(divisor, &remainder);
     }
@@ -898,15 +830,15 @@ pub fn udiv_mod<let N: u32, let BITS: u32>(
 /// Compute the `BigInt` integer division.
 ///
 /// Returns `floor(numerator / divisor)`.
-/// All constraints and soundness details are handled inside `udiv_mod`.
+/// All constraints and soundness details are handled inside `div_rem`.
 pub fn div<let N: u32, let BITS: u32>(numerator: &[u128; N], divisor: &[u128; N]) -> [u128; N] {
-    udiv_mod::<N, BITS>(numerator, divisor).0
+    div_rem::<N, BITS>(numerator, divisor).0
 }
 
 /// Compute the `BigInt` remainder.
 ///
 /// Returns `numerator % divisor`.
-/// All constraints and soundness details are handled inside `udiv_mod`.
-pub fn umod<let N: u32, let BITS: u32>(numerator: &[u128; N], divisor: &[u128; N]) -> [u128; N] {
-    udiv_mod::<N, BITS>(numerator, divisor).1
+/// All constraints and soundness details are handled inside `div_rem`.
+pub fn rem<let N: u32, let BITS: u32>(numerator: &[u128; N], divisor: &[u128; N]) -> [u128; N] {
+    div_rem::<N, BITS>(numerator, divisor).1
 }

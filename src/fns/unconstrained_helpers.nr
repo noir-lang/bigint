@@ -304,7 +304,7 @@ pub(crate) unconstrained fn __helper_mul<let N: u32>(
 /// The most significant limb is truncated to 120 bits after the shift.
 ///
 /// No bounds check is performed on `num_shifted_limbs`.
-/// However, we use it only in `__udiv_mod`, where it is not possible to reach
+/// However, we use it only in `__div_rem`, where it is not possible to reach
 /// `num_shifted_limbs` > `N`
 pub(crate) unconstrained fn __shl<let N: u32>(input: &[u128; N], shift: u32) -> [u128; N] {
     let mut result: [u128; N] = [0; N];

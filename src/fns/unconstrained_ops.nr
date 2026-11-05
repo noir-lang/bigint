@@ -119,11 +119,6 @@ pub unconstrained fn __mul<let N: u32, let BITS: u32>(
     __mul_with_quotient::<N, BITS>(lhs, rhs).1
 }
 
-/// Squares a `BigInt` value with modular reduction (unconstrained).
-pub unconstrained fn __sqr<let N: u32, let BITS: u32>(val: &[u128; N]) -> [u128; N] {
-    __mul_with_quotient::<N, BITS>(val, val).1
-}
-
 /// Modular exponentiation via square-and-multiply. LSB-first (unconstrained).
 ///
 /// Computes `x^e mod m`
@@ -143,7 +138,7 @@ pub unconstrained fn __pow<let N: u32, let BITS: u32>(
         if __get_bit(exponent, i) {
             accumulator = __mul::<N, BITS>(&accumulator, &x);
         }
-        x = __sqr::<N, BITS>(&x);
+        x = __mul::<N, BITS>(&x, &x);
     }
     accumulator
 }
@@ -156,7 +151,7 @@ pub unconstrained fn __pow<let N: u32, let BITS: u32>(
 ///   3. divisor * quotient + remainder = numerator
 ///
 /// Fails if the divisor is zero.
-pub unconstrained fn __udiv_mod<let N: u32>(
+pub unconstrained fn __div_rem<let N: u32>(
     numerator: &[u128; N],
     divisor: &[u128; N],
 ) -> ([u128; N], [u128; N]) {
