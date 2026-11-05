@@ -37,6 +37,12 @@ pub(crate) fn limbs_to_field<let N: u32, let BITS: u32>(limbs: &[u128; N]) -> Fi
         validate_gt::<N, BITS>(&grumpkin_modulus, limbs);
     }
 
+    limbs_to_field_unchecked(limbs)
+}
+
+/// Sum the (at most 3) limbs of a `BigInt` value whose value is below the circuit field modulus
+/// into a `Field`, without any range checks.
+fn limbs_to_field_unchecked<let N: u32>(limbs: &[u128; N]) -> Field {
     if N < 2 {
         limbs[0] as Field
     } else if N == 2 {
@@ -62,7 +68,15 @@ pub fn from_field<let N: u32, let BITS: u32>(val: Field) -> [u128; N] {
     // we check the bit length, the limbs being max 120 bits, and the value in total is less than the field modulus
     let result: [u128; N] = unsafe { __from_field::<N>(val) };
 
-    if !std::runtime::is_unconstrained() {
+    if std::runtime::is_unconstrained() {
+        // `__from_field` truncates values which do not fit in `N` limbs, so check that the limbs
+        // encode `val` and that the top limb fits in `BITS - 120 * (N - 1)` bits.
+        let top_limb_bits: u128 = (BITS - (N - 1) * 120) as u128;
+        assert(
+            (limbs_to_field_unchecked(&result) == val) & ((result[N - 1] >> top_limb_bits) == 0),
+            "attempt to convert a Field which does not fit",
+        );
+    } else {
         // validate the limbs are in range and the value in total is less than the Grumpkin modulus
         if BITS > 253 {
             // `2^BITS` is larger than the Grumpkin modulus, so check against it explicitly.
@@ -76,16 +90,7 @@ pub fn from_field<let N: u32, let BITS: u32>(val: Field) -> [u128; N] {
         validate_in_range::<N, BITS>(&result);
 
         // validate the limbs sum up to the field value
-        let field_val: Field = if N < 2 {
-            result[0] as Field
-        } else if N == 2 {
-            (result[0] as Field) + (result[1] as Field) * (TWO_POW_120 as Field)
-        } else {
-            (result[0] as Field)
-                + (result[1] as Field) * (TWO_POW_120 as Field)
-                + (result[2] as Field) * TWO_POW_240
-        };
-        assert_eq(field_val, val);
+        assert_eq(limbs_to_field_unchecked(&result), val);
     }
 
     result
