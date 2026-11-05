@@ -83,8 +83,8 @@ Every shipped type has `BITS >= 254`, so `2^BITS > p`.
 
 | Operation | Result | Fails if | Range-checks inputs |
 | --- | --- | --- | --- |
-| `a + b` | `value(a) + value(b)` | the sum is `>= 2^BITS` | no |
-| `a - b` | `value(a) - value(b)` | `value(b) > value(a)` | no |
+| `a + b` | `value(a) + value(b)` | the sum is `>= 2^BITS` (`attempt to add with overflow`) | no |
+| `a - b` | `value(a) - value(b)` | `value(b) > value(a)` (`attempt to subtract with overflow`) | no |
 | `a * b` | `(a * b) mod 2^BITS` | an input is not canonical, or `N > 65` (compile time) | yes |
 | `a.sqr()` | `(a * a) mod 2^BITS` | as `*` | yes |
 | `a.udiv_mod(b)` | `(floor(a / b), a mod b)` | `b == 0`, an input is not canonical, or `N > 65` (compile time) | yes |
@@ -189,7 +189,7 @@ Observed results for `U256`, with `a = [2^120, 0, 0]` (`2^120` with non-canonica
 | Expression | Constrained | Unconstrained |
 | --- | --- | --- |
 | `a + 1` | `[1, 1, 0]` (correct) | — |
-| `b + 0` | fails | fails |
+| `b + 0` | fails with `attempt to add with overflow` | fails with `attempt to add with overflow` |
 | `b - 0` | fails | `[0, 0, 2^17]`: not a valid `U256` |
 | `[0, 1, 0] - a` | `[0, 0, 0]` (correct) | `[0, 0, 0]` (correct) |
 | `a - [0, 1, 0]` | fails (correct: `0`) | fails with `attempt to subtract with overflow` (correct: `0`) |
