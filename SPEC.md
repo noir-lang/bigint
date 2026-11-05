@@ -14,6 +14,12 @@ Every pull request which changes behaviour must update this document in the same
 - An operation **fails** if no valid proof exists for it. For constrained code this is a constraint failure; most failures also abort execution with an assertion message. Unconstrained functions fail by aborting execution.
 - **Unchecked values** are values which may not be canonical: circuit inputs (whose limbs are only known to be `u128`s), values returned from unconstrained functions, and values built with `from_limbs_unsafe` or `set_limb_unsafe`. As limbs have type `u128`, every limb of every value is below `2^128`. A non-canonical value may encode an integer in `[0, 2^BITS)` with different limbs (e.g. `[2^120, 0, 0]` for `2^120`), or an integer `>= 2^BITS`. [Canonical inputs](#canonical-inputs) describes how each function handles them.
 
+## Requirements
+
+Every function in the library must meet these requirements. A function which does not has a bug, which is listed in the [consistency review](#consistency-review) until it is fixed.
+
+- **Distinct canonical values are always distinguishable.** If `a` and `b` are canonical and `value(a) != value(b)`, every function which compares `a` and `b`, or tests whether they are equal, treats them as different. In particular, no function may compare values via their encodings in `Field`: when `BITS >= 254`, distinct values which differ by a multiple of `p` have the same encoding.
+
 ## Types
 
 `#[derive_bigint(BITS)]` implements `BigInt` for a struct with a single field `limbs: [u128; N]`. It fails to compile unless:
