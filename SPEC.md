@@ -16,9 +16,9 @@ Every pull request which changes behaviour must update this document in the same
 
 ## Requirements
 
-Every function in the library must meet these requirements. A function which does not has a bug, which is listed in the [consistency review](#consistency-review) until it is fixed.
+The library's functions must meet these requirements. A function which does not has a bug, which is listed in the [consistency review](#consistency-review) until it is fixed.
 
-- **Distinct canonical values are always distinguishable.** If `a` and `b` are canonical and `value(a) != value(b)`, every function which compares `a` and `b`, or tests whether they are equal, treats them as different. In particular, no function may compare values via their encodings in `Field`: when `BITS >= 254`, distinct values which differ by a multiple of `p` have the same encoding.
+- **Equality distinguishes distinct canonical values.** If `a` and `b` are canonical and `value(a) != value(b)`, the equality tests (`==`, `!=`, `__eq` and `assert_is_not_equal`) treat them as different. So equality must not be tested via the values' encodings in `Field`: when `BITS >= 254`, distinct values which differ by a multiple of `p` have the same encoding.
 
 ## Types
 
