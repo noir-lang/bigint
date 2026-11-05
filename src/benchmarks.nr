@@ -9,7 +9,8 @@ comptime fn make_bench(m: Module, typ_path: Quoted) -> Quoted {
 
     let mul_bench_name = f"mul_{module_name}".quoted_contents();
 
-    let udiv_mod_bench_name = f"udiv_mod_{module_name}".quoted_contents();
+    let div_rem_bench_name = f"div_rem_{module_name}".quoted_contents();
+    let rem_bench_name = f"rem_{module_name}".quoted_contents();
     let div_bench_name = f"div_{module_name}".quoted_contents();
 
     let eq_bench_name = f"eq_{module_name}".quoted_contents();
@@ -17,7 +18,6 @@ comptime fn make_bench(m: Module, typ_path: Quoted) -> Quoted {
     let is_zero_bench_name = f"is_zero_{module_name}".quoted_contents();
 
     let assert_is_not_equal_bench_name = f"assert_is_not_equal_{module_name}".quoted_contents();
-    let assert_is_not_zero_bench_name = f"assert_is_not_zero_{module_name}".quoted_contents();
 
     let validate_in_range_bench_name = f"validate_in_range_{module_name}".quoted_contents();
 
@@ -64,8 +64,13 @@ comptime fn make_bench(m: Module, typ_path: Quoted) -> Quoted {
         }
 
         #[export]
-        fn $udiv_mod_bench_name(a: $typ, b: $typ) -> ($typ, $typ) {
-            $BigInt::udiv_mod(&a, &b)
+        fn $rem_bench_name(a: $typ, b: $typ) -> $typ {
+            a % b
+        }
+
+        #[export]
+        fn $div_rem_bench_name(a: $typ, b: $typ) -> ($typ, $typ) {
+            $BigInt::div_rem(&a, &b)
         }
 
         #[export]
@@ -91,11 +96,6 @@ comptime fn make_bench(m: Module, typ_path: Quoted) -> Quoted {
         #[export]
         fn $assert_is_not_equal_bench_name(a: $typ, b: $typ) {
             $BigInt::assert_is_not_equal(&a, &b)
-        }
-
-        #[export]
-        fn $assert_is_not_zero_bench_name(a: $typ) {
-            $BigInt::assert_is_not_zero(&a)
         }
 
         #[export]

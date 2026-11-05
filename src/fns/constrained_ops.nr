@@ -1,12 +1,12 @@
 use crate::constants::{GRUMPKIN_MODULUS, TWO_POW_120, TWO_POW_240};
 
 use crate::fns::{
-    expressions::{evaluate_quadratic_expression, validate_udiv_mod_expression},
+    expressions::{evaluate_quadratic_expression, validate_div_rem_expression},
     unconstrained_helpers::{
         __from_field, compute_borrow_flags, compute_carry_flags, compute_gte_flags,
         compute_sub_borrow_flags,
     },
-    unconstrained_ops::{__add, __mul, __sqr, __sub, __udiv_mod},
+    unconstrained_ops::{__add, __div_rem, __mul, __sqr, __sub},
 };
 
 use std::cmp::Ordering;
@@ -276,11 +276,6 @@ pub fn is_zero_integer<let N: u32>(val: &[u128; N]) -> bool {
         limb_sum += val[i].into();
     }
     limb_sum == 0
-}
-
-/// Validate that a `BigInt` value is not zero.
-pub fn assert_is_not_zero<let N: u32, let BITS: u32>(val: &[u128; N]) {
-    assert_is_not_zero_integer(val);
 }
 
 /// Check whether a `BigInt` value is zero.
@@ -606,15 +601,16 @@ pub fn sub<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u128; N]) -> [u128
 /// Compute the `BigInt` integer division with remainder
 ///
 /// Computes `quotient = floor(numerator / divisor)` and
-/// `remainder = numerator % divisor` by:
-///   1. Computing `(quotient, remainder)` out of circuit via `__udiv_mod`.
+/// `remainder = numerator % divisor`, i.e. Euclidean division (which coincides with floored and
+/// truncated division for unsigned integers), by:
+///   1. Computing `(quotient, remainder)` out of circuit via `__div_rem`.
 ///   2. Constraining the quadratic relation
 ///        quotient * divisor + remainder - numerator = 0
-///      with `validate_udiv_mod_expression`.
+///      with `validate_div_rem_expression`.
 ///   3. Enforcing `remainder < divisor`.
 ///
 /// ## Soundness
-/// Soundness reduces to `validate_udiv_mod_expression` for the relation
+/// Soundness reduces to `validate_div_rem_expression` for the relation
 ///     quotient * divisor + remainder - numerator = 0,
 /// together with `remainder < divisor` check enforced via `validate_gt`.
 ///
@@ -627,15 +623,15 @@ pub fn sub<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u128; N]) -> [u128
 /// ## Note
 /// Enforcing `divisor != 0` is not necessary. `remainder < divisor`
 /// Already enforces this.
-pub fn udiv_mod<let N: u32, let BITS: u32>(
+pub fn div_rem<let N: u32, let BITS: u32>(
     numerator: &[u128; N],
     divisor: &[u128; N],
 ) -> ([u128; N], [u128; N]) {
-    // Safety: We constrain the result of __udiv_mod immediately after
-    let (quotient, remainder): ([u128; N], [u128; N]) = unsafe { __udiv_mod(numerator, divisor) };
+    // Safety: We constrain the result of __div_rem immediately after
+    let (quotient, remainder): ([u128; N], [u128; N]) = unsafe { __div_rem(numerator, divisor) };
     if !std::runtime::is_unconstrained() {
         // quotient * divisor + remainder - numerator = 0
-        validate_udiv_mod_expression::<N, BITS>(numerator, divisor, &quotient, &remainder);
+        validate_div_rem_expression::<N, BITS>(numerator, divisor, &quotient, &remainder);
         // remainder < divisor
         validate_gt::<N, BITS>(divisor, &remainder);
     }
@@ -645,15 +641,15 @@ pub fn udiv_mod<let N: u32, let BITS: u32>(
 /// Compute the `BigInt` integer division.
 ///
 /// Returns `floor(numerator / divisor)`.
-/// All constraints and soundness details are handled inside `udiv_mod`.
+/// All constraints and soundness details are handled inside `div_rem`.
 pub fn div<let N: u32, let BITS: u32>(numerator: &[u128; N], divisor: &[u128; N]) -> [u128; N] {
-    udiv_mod::<N, BITS>(numerator, divisor).0
+    div_rem::<N, BITS>(numerator, divisor).0
 }
 
 /// Compute the `BigInt` remainder.
 ///
 /// Returns `numerator % divisor`.
-/// All constraints and soundness details are handled inside `udiv_mod`.
-pub fn umod<let N: u32, let BITS: u32>(numerator: &[u128; N], divisor: &[u128; N]) -> [u128; N] {
-    udiv_mod::<N, BITS>(numerator, divisor).1
+/// All constraints and soundness details are handled inside `div_rem`.
+pub fn rem<let N: u32, let BITS: u32>(numerator: &[u128; N], divisor: &[u128; N]) -> [u128; N] {
+    div_rem::<N, BITS>(numerator, divisor).1
 }
