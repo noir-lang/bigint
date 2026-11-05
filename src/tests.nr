@@ -1138,6 +1138,76 @@ fn test_assert_is_not_equal_fail_U256() {
     test_assert_is_not_equal_fail::<3, U256>();
 }
 
+#[test(should_fail_with = "assert_is_not_equal fail")]
+unconstrained fn test_assert_is_not_equal_fail_unconstrained_U256() {
+    test_assert_is_not_equal_fail::<3, U256>();
+}
+
+// Distinct values which are congruent modulo the circuit field modulus `p`
+#[test]
+fn test_assert_is_not_equal_congruent_mod_p_U256() {
+    let p: U256 = U256::from_limbs(GRUMPKIN_MODULUS);
+    U256::zero().assert_is_not_equal(&p);
+    p.assert_is_not_equal(&U256::zero());
+    U256::one().assert_is_not_equal(&(p + U256::one()));
+}
+
+#[test]
+unconstrained fn test_assert_is_not_equal_congruent_mod_p_unconstrained_U256() {
+    let p: U256 = U256::from_limbs(GRUMPKIN_MODULUS);
+    U256::zero().assert_is_not_equal(&p);
+    U256::one().assert_is_not_equal(&(p + U256::one()));
+}
+
+#[test]
+fn fuzz_assert_is_not_equal_congruent_mod_p_U256(seed: [u8; 5]) {
+    let a: U256 = derive_from_seed(seed);
+    let p: U256 = U256::from_limbs(GRUMPKIN_MODULUS);
+    let max: U256 = U256::from_limbs(U256_MAX);
+    // `a + p` if it fits, and otherwise `a - p`, which is then non-negative as `2^256 < 2p`
+    let b: U256 = if a <= max - p { a + p } else { a - p };
+    a.assert_is_not_equal(&b);
+    b.assert_is_not_equal(&a);
+}
+
+// Wider types: `x` and `x + p * y` differ by a multiple of `p`
+#[test]
+fn test_assert_is_not_equal_congruent_mod_p_U2048() {
+    let p: U2048 = U2048::from(U256::from_limbs(GRUMPKIN_MODULUS));
+    let x: U2048 = small_from_seed([1, 2, 3, 4]);
+    let y: U2048 = small_from_seed([5, 6, 7, 8]);
+    x.assert_is_not_equal(&(x + p * y));
+}
+
+#[test]
+fn test_assert_is_not_equal_congruent_mod_p_U8192() {
+    let p: U8192 = U8192::from(U256::from_limbs(GRUMPKIN_MODULUS));
+    U8192::zero().assert_is_not_equal(&p);
+}
+
+// Non-canonical encodings of the same value must not be accepted as distinct
+#[test(should_fail)]
+fn test_assert_is_not_equal_non_canonical_equal_U256() {
+    let a: U256 = U256::from_limbs_unsafe([TWO_POW_120, 0, 0]);
+    let b: U256 = U256::from_limbs([0, 1, 0]);
+    a.assert_is_not_equal(&b);
+}
+
+// The encodings of `2^240` differ in both packed pairs of limbs
+#[test(should_fail)]
+fn test_assert_is_not_equal_non_canonical_equal_across_pairs_U256() {
+    let a: U256 = U256::from_limbs_unsafe([0, TWO_POW_120, 0]);
+    let b: U256 = U256::from_limbs([0, 0, 1]);
+    a.assert_is_not_equal(&b);
+}
+
+#[test(should_fail)]
+unconstrained fn test_assert_is_not_equal_non_canonical_equal_unconstrained_U256() {
+    let a: U256 = U256::from_limbs_unsafe([0, TWO_POW_120, 0]);
+    let b: U256 = U256::from_limbs([0, 0, 1]);
+    a.assert_is_not_equal(&b);
+}
+
 #[test]
 fn test_add_U256() {
     test_add::<3, U256>();

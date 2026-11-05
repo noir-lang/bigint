@@ -198,28 +198,68 @@ pub fn derive_from_seed<let N: u32, let BITS: u32, let SeedBytes: u32>(
 
 /// Validate lhs != rhs
 ///
-/// We compare `A` and `B` via their encodings in the circuit `Field`, constraining that
-/// `A - B != 0 (mod p)`.
+/// Both inputs are range-checked, so each value has a unique limb representation. Pairs of
+/// adjacent limbs are packed into `Field`s, `L_j = lhs[2j] + lhs[2j+1] * 2^{120}` and likewise
+/// `R_j`, and the prover supplies a witness `w` with `sum_j (L_j - R_j) * w_j == 1`.
 ///
 /// ## Soundness
-/// If `A == B`, then `A - B == 0` in `Field`, so the assertion fails.
+/// If `A == B`, the range-checked limbs are equal, so every `L_j - R_j` is zero, the sum is zero
+/// and the assertion fails, whatever the witness. The range checks are required: values which
+/// bypass the `BigInt` constructors may encode the same integer with different limbs, e.g.
+/// `[0, 2^120, 0]` and `[0, 0, 1]`, whose packed limbs differ.
 ///
 /// ## Completeness
-/// If `2^BITS > p`, distinct values may be congruent modulo `p`, in which case an honest prover
-/// with `A != B` fails the assertion. For random `A, B` the probability of this is roughly 1/p.
-/// For `BITS < 254`, `|A - B| < p` and this function is complete.
+/// Each packed limb is below `2^{240}`, so `|L_j - R_j| < 2^{240} < p` and `L_j - R_j` is zero in
+/// `Field` only if it is zero over the integers. So if `A != B`, some `L_j - R_j` is non-zero in
+/// `Field`, and `w_j = 1 / (L_j - R_j)` (with every other entry zero) satisfies the assertion.
+/// This holds for every `BITS`, including `BITS >= 254`, where distinct values may be congruent
+/// modulo `p`.
+///
+/// Range checks are deduplicated per value, so they add no constraints for inputs which are
+/// already range-checked, e.g. the outputs of other operations.
 pub fn assert_is_not_equal<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u128; N]) {
-    let mut l: Field = 0;
-    let mut r: Field = 0;
-    for i in 0..N {
-        l *= TWO_POW_120 as Field;
-        r *= TWO_POW_120 as Field;
+    validate_in_range::<N, BITS>(lhs);
+    validate_in_range::<N, BITS>(rhs);
 
-        l += lhs[N - i - 1] as Field;
-        r += rhs[N - i - 1] as Field;
+    let diffs: [Field; (N + 1) / 2] = packed_limb_differences(lhs, rhs);
+    // Safety: the witness is only used in the assertion below, which holds only if some
+    // difference is non-zero, i.e. `lhs != rhs`
+    let inverses: [Field; (N + 1) / 2] = unsafe { __inverse_of_first_non_zero(diffs) };
+
+    let mut sum: Field = 0;
+    for j in 0..(N + 1) / 2 {
+        sum += diffs[j] * inverses[j];
     }
+    assert(sum == 1, "assert_is_not_equal fail");
+}
 
-    assert(l != r, "assert_is_not_equal fail");
+/// Returns `L_j - R_j`, where `L_j = lhs[2j] + lhs[2j+1] * 2^{120}` (and likewise `R_j`) packs two
+/// adjacent limbs. If `N` is odd, the last entry holds only the top limb.
+fn packed_limb_differences<let N: u32>(lhs: &[u128; N], rhs: &[u128; N]) -> [Field; (N + 1) / 2] {
+    let mut diffs: [Field; (N + 1) / 2] = [0; (N + 1) / 2];
+    for j in 0..(N + 1) / 2 {
+        let lo: u32 = 2 * j;
+        let mut diff: Field = (lhs[lo] as Field) - (rhs[lo] as Field);
+        if lo + 1 < N {
+            diff += ((lhs[lo + 1] as Field) - (rhs[lo + 1] as Field)) * (TWO_POW_120 as Field);
+        }
+        diffs[j] = diff;
+    }
+    diffs
+}
+
+/// Returns `w` with `w_j = 1 / x_j` for the first non-zero `x_j`, and `w_k = 0` otherwise. If every
+/// `x_j` is zero, `w` is zero.
+unconstrained fn __inverse_of_first_non_zero<let M: u32>(x: [Field; M]) -> [Field; M] {
+    let mut w: [Field; M] = [0; M];
+    let mut found: bool = false;
+    for j in 0..M {
+        if !found & (x[j] != 0) {
+            w[j] = 1 / x[j];
+            found = true;
+        }
+    }
+    w
 }
 
 /// Compute equality flag

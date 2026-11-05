@@ -173,14 +173,11 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
 
     /// Asserts that `self != other`.
     ///
+    /// Range-checks both values, and succeeds exactly when `assert(self != other)` does: for every
+    /// width, distinct values always pass.
+    ///
     /// # Performance Note
     /// This is cheaper than `assert(self != other)` because it avoids creating a boolean result.
-    ///
-    /// # Completeness
-    /// The values are compared via their encodings in the circuit `Field`, so this fails for
-    /// distinct values which are congruent modulo the circuit field modulus `p`. For values
-    /// with `BITS < 254` this cannot happen; otherwise there's a negligible (~1/p) probability
-    /// for random inputs.
     fn assert_is_not_equal(&self, other: &Self);
 
     /// Returns `true` if `self == 0`.
