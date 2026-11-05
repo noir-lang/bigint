@@ -32,7 +32,7 @@ bigint = { tag = "vX.Y.Z", git = "https://github.com/noir-lang/bigint" }
 ## Quick example
 
 ```rust
-use bigint::{BigInt, U256};
+use bigint::U256;
 
 fn main(a: U256, b: U256, expected: U256) {
     assert(a + b == expected);
@@ -55,6 +55,8 @@ The following types are provided (see [`src/types/`](./src/types/)):
 Values are stored as arrays of `N` little-endian 120-bit limbs held in `u128`s, i.e. `[a, b, c]` represents $a + b \cdot 2^{120} + c \cdot 2^{240}$. The headroom left in each `u128` allows intermediate sums and products to be computed without overflow.
 
 A `UX` holds values in $[0, 2^X)$: the top limb is range-checked to `X - 120 * (N - 1)` bits, so every value has exactly one limb representation. Every constructor (other than the `*_unsafe` ones, see below) and every operation range-checks its result.
+
+Values which bypass the constructors are not range-checked until they are used: circuit inputs (e.g. `fn main(a: U256)`, whose limbs are only checked to be `u128`s), values returned from unconstrained functions, and values built with `from_limbs_unsafe` or `set_limb_unsafe`. In circuits, no operation returns an incorrect result for such values: `+` and `-` do not range-check their inputs, but return the correct result or fail, and the other operations (`*`, `/`, `%`, `div_rem`, `==`, comparisons, conversions and `evaluate_quadratic_expression`) range-check their inputs. In unconstrained code, most operations assume that their inputs are in range and do not check them. Call `validate_in_range` to check such a value explicitly. See [SPEC.md](SPEC.md) for the behaviour of each operation.
 
 ### Defining your own width
 
@@ -119,16 +121,15 @@ These generate no constraints. Their results must be constrained, ideally with `
 
 ### `evaluate_quadratic_expression`
 
-Every constrained operator performs its own reduction and range checks, which makes chaining several of them expensive. A cheaper approach is to compute the result with unconstrained functions and then constrain the whole relation at once:
+Every constrained operator performs its own reduction and range checks, which makes chaining several of them expensive. A cheaper approach is to compute the result with unconstrained code and then constrain the whole relation at once:
 
 ```rust
-use bigint::{BigInt, U256};
-use bigint::evaluate_quadratic_expression;
+use bigint::{compute_quadratic_expression, evaluate_quadratic_expression, U256};
 
 // Check that (x1 * x2) + x3 == expected (mod 2^256)
 fn main(x1: U256, x2: U256, x3: U256, expected: U256) {
     // Safety: the result is constrained below
-    let res = unsafe { x1.__mul(&x2).__add(&x3) };
+    let (_, res) = unsafe { compute_quadratic_expression([[x1]], [[false]], [[x2]], [[false]], [x3], [false]) };
 
     // Constrain (x1 * x2) + x3 - res == 0
     evaluate_quadratic_expression(
@@ -166,6 +167,8 @@ where a `true` flag negates the corresponding term.
 The combination of `NUM_PRODUCTS`, `LHS_N` and `RHS_N` must be small enough that intermediate product limbs do not exceed $2^{246}$. This is enforced, and expressions which could overflow are rejected. As a rough guide, keep `NUM_PRODUCTS * LHS_N * RHS_N` well below 64.
 
 `compute_quadratic_expression` is the unconstrained counterpart. It returns the quotient and remainder of such an expression.
+
+Each call to an unconstrained function from constrained code range-checks the values it returns, so compute a witness in a single call (e.g. with `compute_quadratic_expression`, or your own `unconstrained fn`) rather than by chaining `__` methods. For example, `a.__mul(&b).__add(&c.__mul(&d))` makes three calls, and so range-checks two intermediate values which a single call would not.
 
 ## Benchmarks
 

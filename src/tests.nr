@@ -62,7 +62,10 @@ fn test_sub_underflow_regression() {
 // Tests to confirm that we can no longer pass more than 1 extra `MOD` as a part of the witness
 
 #[test(should_fail_with = "call to assert_max_bit_size")]
-fn test_evaluate_quadratic_expression_add_extra_mod_fuzz(xseed: [u8; 4], yseed: [u8; 3]) {
+fn test_evaluate_quadratic_expression_add_rejects_hidden_two_pow_bits_fuzz(
+    xseed: [u8; 4],
+    yseed: [u8; 3],
+) {
     let x: U256 = U256::derive_from_seed(xseed);
     let y: U256 = U256::derive_from_seed(yseed);
 
@@ -82,7 +85,10 @@ fn test_evaluate_quadratic_expression_add_extra_mod_fuzz(xseed: [u8; 4], yseed: 
 }
 
 #[test(should_fail_with = "call to assert_max_bit_size")]
-fn test_evaluate_quadratic_expression_mul_extra_mod_fuzz(xseed: [u8; 1], yseed: [u8; 2]) {
+fn test_evaluate_quadratic_expression_mul_rejects_hidden_two_pow_bits_fuzz(
+    xseed: [u8; 1],
+    yseed: [u8; 2],
+) {
     let x: U256 = U256::derive_from_seed(xseed);
     let y: U256 = U256::derive_from_seed(yseed);
 
@@ -104,7 +110,7 @@ fn test_evaluate_quadratic_expression_mul_extra_mod_fuzz(xseed: [u8; 1], yseed: 
 // This tests that we no longer validate div_rem expression `(mod MOD)`
 // This would have passed previously with `evaluate_quadratic_expression` call
 #[test(should_fail)]
-fn test_div_rem_extra_modulus_regression(xseed: [u8; 1], yseed: [u8; 2]) {
+fn test_div_rem_rejects_hidden_two_pow_bits(xseed: [u8; 1], yseed: [u8; 2]) {
     let x: U256 = U256::derive_from_seed(xseed);
     let y: U256 = U256::derive_from_seed(yseed);
 

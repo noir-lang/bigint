@@ -92,13 +92,13 @@ All arithmetic is **wrapping**: results are reduced modulo `2^BITS`. Every resul
 
 Division by zero fails with `attempt to divide by zero`. The circuit itself also rejects it, as it requires `remainder < divisor`.
 
-For `+` and `-`, if the inputs are unchecked the result is still determined by `value(a)` and `value(b)`. Either the proof fails, or the result is the canonical representative of the sum or difference modulo `2^BITS`.
+For unchecked inputs, `+` and `-` never return an incorrect result: either the proof fails, or the result is the canonical representative of the sum or difference of `value(a)` and `value(b)` modulo `2^BITS`. They may fail for some non-canonical inputs even when the result exists, e.g. `[2^120, 0, 0] - [0, 1, 0]`.
 
 The compile-time failure for `N > 65` comes from the product bound described under [quadratic expressions](#quadratic-expressions). It affects `U8192`. See [consistency review](#consistency-review), item 1.
 
 ## Unconstrained functions
 
-Functions prefixed with `__` generate no constraints. For canonical inputs they return the same values as their constrained counterparts. For non-canonical inputs their results are unspecified, and they may return non-canonical values.
+Functions prefixed with `__` generate no constraints. For canonical inputs they return the same values as their constrained counterparts. [Canonical inputs](#canonical-inputs) describes their results for non-canonical inputs.
 
 | Function | Result | Fails if |
 | --- | --- | --- |
@@ -154,23 +154,25 @@ Returns `(q, r)`, where `r = E mod 2^BITS` is canonical. `q` is the quotient `fl
 
 ## Canonical inputs
 
-Every function falls into one of three classes for unchecked inputs:
+Every function falls into one of four classes for unchecked inputs:
 
 - **Checks**: the function fails unless its inputs are canonical.
-- **Correct for any limbs**: the function's result depends only on the integer values of its inputs, so it does not need canonical inputs. It may still fail if an input is too large.
-- **Requires but does not check**: the function is only specified for canonical inputs. For other inputs it returns an unspecified result without failing.
+- **Correct for any limbs**: the function returns the correct result for the integer values of its inputs, whatever their limbs. It fails only if the correct result is out of range.
+- **Never incorrect**: for non-canonical inputs the function returns the correct result or fails. It may fail even if the correct result is in range.
+- **Requires but does not check**: the function is only specified for canonical inputs. For other inputs it may return a wrong or non-canonical result without failing.
 
 A function in the last class may return a wrong or non-canonical result. That is acceptable only where the result is constrained afterwards, as for witness hints. It is not acceptable for code whose result is used as is, e.g. unconstrained programs.
 
 | Function | Constrained execution | Unconstrained execution |
 | --- | --- | --- |
-| `+`, `-` | correct for any limbs (fails if the result cannot be reduced with a single `2^BITS`) | requires but does not check |
+| `+`, `-` | never incorrect | requires but does not check |
 | `*` | checks | requires but does not check |
 | `/`, `%`, `div_rem` | checks | requires but does not check |
 | `==`, `!=`, `<`, `<=`, `>`, `>=`, `cmp` | checks | checks |
 | `is_zero` | correct for any limbs | correct for any limbs |
 | `assert_is_not_equal` | correct for any limbs (compares modulo `p`) | correct for any limbs (compares modulo `p`) |
 | `to_field` | checks | checks |
+| `From<A> for B` (widening) | checks | checks |
 | `to_be_bytes`, `to_le_bytes` | checks | checks |
 | `evaluate_quadratic_expression` | checks | checks |
 | `set_limb` | checks the new limb only | checks the new limb only |
@@ -184,7 +186,9 @@ Observed results on `main` for `U256`, with `a = [2^120, 0, 0]` (`2^120` with no
 | --- | --- | --- |
 | `a + 1` | `[1, 1, 0]` (correct) | — |
 | `b + 0` | fails | `[0, 0, 2^16]`, i.e. `2^256`: not a valid `U256` (correct: `0`) |
+| `a - [0, 1, 0]` | fails (correct: `0`) | `[0, 0, 0]` (correct) |
 | `a * 1` | fails | `[0, 1, 0]` (correct) |
+| `c * c`, with `c = [2^127, 0, 0]` | fails | a canonical but wrong value, `2^254 mod p` (correct: `2^254`) |
 | `a / 1` | fails | `[2^120 - 1, 0, 0]`: wrong (correct: `2^120`) |
 | `b / 1` | fails | `[0, 0, 2^17]`: not a valid `U256` |
 | `a == [0, 1, 0]` | fails | fails |
@@ -200,17 +204,14 @@ Known inconsistencies on `main`, and the open pull requests which address them.
 1. **`U8192` cannot do arithmetic.** `*`, `/`, `%`, `div_rem` and `evaluate_quadratic_expression` all fail to compile for types with `N > 65`, which includes the shipped `U8192`. This is far stricter than for every other shipped type. Addressed by #18.
 2. **`assert_is_not_equal` has a stricter precondition than `!=`.** For every shipped type (`BITS >= 254`) it fails for distinct values congruent modulo `p`, whereas `assert(a != b)` does not. An honest prover with such values cannot produce a proof. Not addressed.
 3. **Canonical-input handling differs between functions and between execution modes** (see [canonical inputs](#canonical-inputs)):
-   - In unconstrained execution, `+`, `-`, `*`, `/`, `%`, `div_rem` and the `__` functions require canonical inputs but do not check them, and can return wrong or non-canonical results (e.g. `[2^120, 0, 0] / 1` returns `2^120 - 1`). In constrained execution the same operators either check or are correct for any limbs. `==` and the comparisons check in both modes. Not addressed.
-   - In constrained execution, `+` and `-` are correct for any limbs, while every other binary operation checks. This is sound, but `a + b` succeeds where `a == b` or `a * b` fails. #20 documents this.
+   - In unconstrained execution, `+`, `-`, `*`, `/`, `%`, `div_rem` and the `__` functions require canonical inputs but do not check them, and can return wrong or non-canonical results (e.g. `[2^120, 0, 0] / 1` returns `2^120 - 1`, and `[2^127, 0, 0]^2` returns `2^254 mod p`). In constrained execution the same operators either check or never return an incorrect result. `==` and the comparisons check in both modes. Not addressed.
+   - In constrained execution, `+` and `-` do not check their inputs, while every other binary operation does. They never return an incorrect result, but `a + b` may succeed where `a == b` or `a * b` fails, and may also fail for non-canonical inputs whose result exists. The README documents this.
    - `__eq` compares limbs, so it returns `false` for different encodings of the same value, where `==` fails. Not addressed.
 4. **The expression size bound ignores negated terms.** The compile-time check bounds the product limbs for unnegated terms only, so it may accept expressions which an honest prover cannot prove. The code comments describe this, but no test covers it. Not addressed.
 5. **`compute_quadratic_expression` returns a quotient which includes internal offsets.** When any flag is set, `q` is not the quotient of `E` by `2^BITS`, and it may not be a valid value of `T`. #8 changes the function to return the value of the expression instead.
 6. **Documentation drift.** These comments disagree with the code:
    - The `BigInt` trait documentation says negation wraps; negation has been removed. It says single-limb types "may produce incorrect results"; `derive_bigint` rejects them at compile time.
-   - The doc comments of `compute_quadratic_expression` and `evaluate_quadratic_expression` describe `product(lhs_terms[i])`. The code computes a sum, as the README says.
    - `derive_from_seed` says it derives `BITS * 2` bits and reduces modulo `MOD`. It truncates hash output to `BITS` bits.
    - The `add` and `sub` "limitations" sections in `src/fns/constrained_ops.nr` describe spurious witnesses when `lhs + rhs + MOD < 2^BITS`. As `MOD = 2^BITS` for every type, this cannot happen.
    - `compute_linear_expressions` refers to a test, `test_evaluate_quadratic_expression_limb_overflow`, which does not exist.
    - The 256-byte limit on `derive_from_seed` seeds is not documented on the trait.
-
-   #20 fixes some of these.

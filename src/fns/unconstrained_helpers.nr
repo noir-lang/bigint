@@ -212,7 +212,7 @@ pub(crate) unconstrained fn __reduce<let N: u32, let BITS: u32>(
 // ------------------------------ ARITHMETIC HELPER FUNCTIONS ------------------------------
 // These are the functions that operate on limbs as if they were just big integers
 
-/// Adds `1` to the BigInt value without modular reduction (unconstrained)
+/// Adds `1` to the BigInt value, without checking for overflow (unconstrained)
 ///
 /// ## Note
 /// The `carry` must be `0` at the end of the loop.
@@ -230,7 +230,7 @@ pub(crate) unconstrained fn __increment<let N: u32>(val: &[u128; N]) -> [u128; N
     result
 }
 
-/// Adds two `BigInt` values without modular reduction (unconstrained).
+/// Adds two `BigInt` values limb-wise, without checking for overflow (unconstrained).
 ///
 /// ## Note
 /// The `carry` must be `0` at the end of the loop.
@@ -252,7 +252,7 @@ pub(crate) unconstrained fn __helper_add<let N: u32>(
     result
 }
 
-/// Subtracts two `BigInt` values without modular reduction (unconstrained).
+/// Subtracts two `BigInt` values limb-wise, without checking for underflow (unconstrained).
 ///
 /// ## Note
 /// The `borrow` must be `0` at the end of the loop.
@@ -272,14 +272,14 @@ pub(crate) unconstrained fn __helper_sub<let N: u32>(
     result
 }
 
-/// Multiplies two `BigInt` values without modular reduction (unconstrained).
+/// Multiplies two `BigInt` values into a double-width result (unconstrained).
 ///
 /// Computes the full schoolbook product of two N-limb little-endian arrays
 ///
 /// ## Note
 /// The mathematical product fits in `2 * N - 1` limbs, but we keep `2 * N`
 /// limbs intentionally as the extra high limb safely absorbs a possible single limb overflow
-/// for moduli close to `120 * N` bits.
+/// for values close to `2^{120 * N}`.
 pub(crate) unconstrained fn __helper_mul<let N: u32>(
     lhs: &[u128; N],
     rhs: &[u128; N],

@@ -202,7 +202,9 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
     /// - Limb N-1 is < 2^(BITS - 120*(N-1))
     ///
     /// # When to Use
-    /// Call this after `from_limbs()` or `set_limb()` when the input comes from untrusted sources.
+    /// `from_limbs`, `set_limb` and all operations already range-check their results. Call this on
+    /// values which bypass them: values built with `from_limbs_unsafe` or `set_limb_unsafe`,
+    /// circuit inputs, and values returned from unconstrained functions.
     ///
     /// # Performance Note
     /// Range constraints are deduplicated per value, so calling this multiple times on the same
@@ -513,8 +515,10 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
 
 /// Computes the quotient and remainder of a quadratic expression (unconstrained).
 ///
-/// Evaluates `sum_i(product(lhs_terms[i]) * product(rhs_terms[i])) + sum(linear_terms) = q * 2^BITS + r`
-/// and returns `(q, r)`.
+/// Evaluates `E = sum_i(sum(lhs_terms[i]) * sum(rhs_terms[i])) + sum(linear_terms)`, where each
+/// term is negated if its flag is `true`, and returns `(q, r)` with `r = E mod 2^BITS`. When no
+/// flag is set, `q` is the quotient `floor(E / 2^BITS)`. Otherwise `q` includes internal offsets
+/// for the negated terms: see `SPEC.md`.
 ///
 /// # Parameters
 /// - `lhs_terms`: Left-hand side terms for each product. Shape: `[NUM_PRODUCTS][LHS_N]`
@@ -577,7 +581,15 @@ pub unconstrained fn compute_quadratic_expression<T: BigInt, let LHS_N: u32, let
 /// call to this function.
 ///
 /// # Expression Format
-/// Constrains: `sum_i(product(lhs_terms[i]) * product(rhs_terms[i])) + sum(linear_terms) == 0 (mod 2^BITS)`
+/// Constrains `sum_i(sum(lhs_terms[i]) * sum(rhs_terms[i])) + sum(linear_terms) == 0 (mod 2^BITS)`,
+/// where each term is negated if its flag is `true`.
+///
+/// # Computing witnesses
+/// Each call to an unconstrained function from constrained code range-checks the values it
+/// returns. Compute a witness in a single call, e.g. with `compute_quadratic_expression` or your
+/// own `unconstrained fn`, rather than by chaining `__` methods: e.g. for `a * b + c * d`,
+/// `unsafe { a.__mul(&b).__add(&c.__mul(&d)) }` makes three calls, which range-check two
+/// intermediate values that a single call would not.
 ///
 /// # Parameters
 /// - `lhs_terms`: Left-hand side terms for each product. Shape: `[NUM_PRODUCTS][LHS_N]`
@@ -589,9 +601,11 @@ pub unconstrained fn compute_quadratic_expression<T: BigInt, let LHS_N: u32, let
 ///
 /// # Example: Constraining `a * b + c - result == 0`
 /// ```
-/// // First compute result unconstrainedly
+/// // First compute result in a single unconstrained call
 /// // Safety: witness computation, constrained below
-/// let result = unsafe { a.__mul(b).__add(c) };
+/// let (_, result) = unsafe {
+///     compute_quadratic_expression([[a]], [[false]], [[b]], [[false]], [c], [false])
+/// };
 ///
 /// // Then constrain: a * b + c - result == 0
 /// evaluate_quadratic_expression(
@@ -607,7 +621,7 @@ pub unconstrained fn compute_quadratic_expression<T: BigInt, let LHS_N: u32, let
 /// # Example: Constraining `(a + b) * c - d == 0`
 /// ```
 /// // Safety: witness computation
-/// let d = unsafe { (a.__add(b)).__mul(c) };
+/// let d = unsafe { a.__add(&b).__mul(&c) };
 ///
 /// // Constrain: (a + b) * c - d == 0
 /// evaluate_quadratic_expression(
@@ -654,7 +668,7 @@ pub fn evaluate_quadratic_expression<T: BigInt, let LHS_N: u32, let RHS_N: u32, 
 ///
 /// # Requirements
 /// - The BigInt value must be less than the circuit field modulus (Grumpkin: ~2^254)
-/// - For N > 2, the value is validated to be less than the Grumpkin modulus
+/// - For `BITS >= 254`, the value is validated to be less than the Grumpkin modulus
 ///
 /// # Panics
 /// - Fails range validation if the value is >= circuit field modulus
