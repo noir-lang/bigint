@@ -195,9 +195,6 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
     /// Returns `true` if `self == 0`.
     fn is_zero(&self) -> bool;
 
-    /// Asserts that `self != 0`.
-    fn assert_is_not_zero(&self);
-
     /// Validates that each limb is properly range-constrained.
     ///
     /// Ensures:
@@ -406,11 +403,6 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
             fn is_zero(&self) -> bool {
                 let limbs = self.get_limbs();
                 $crate::internal::is_zero(&limbs)
-            }
-
-            fn assert_is_not_zero(&self) {
-                let limbs = self.get_limbs();
-                $crate::internal::assert_is_not_zero(&limbs);
             }
 
         }

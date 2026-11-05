@@ -77,6 +77,12 @@ pub fn to_be_bytes<let N: u32, let BITS: u32>(val: &[u128; N]) -> [u8; (BITS + 7
         }
     }
 
+    // Decomposing the top limb into bytes only bounds it to a whole number of bytes. If `BITS` is
+    // not a multiple of 8, also check that it fits in `BITS - 120 * (N - 1)` bits, so that an
+    // unnormalised value cannot be serialised as a value `>= 2^BITS`.
+    if BITS % 8 != 0 {
+        (val[N - 1] as Field).assert_max_bit_size::<BITS - (N - 1) * 120>();
+    }
     let last_limb_bytes: [u8; ((BITS + 7) / 8 - (N - 1) * 15)] =
         (val[N - 1] as Field).to_be_bytes();
     for i in 0..last_limb_num_bytes {

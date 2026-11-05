@@ -558,6 +558,20 @@ fn test_from_le_bytes_rejects_out_of_range() {
     let _: U252 = U252::from_le_bytes(bytes);
 }
 
+// Byte conversions must not serialise an unnormalised value as a value `>= 2^BITS`: the top limb
+// of a `U252` holds 12 bits, so `[0, 0, 2^13]` (i.e. 2^253) is rejected.
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_to_be_bytes_rejects_out_of_range() {
+    let a: U252 = U252::from_limbs_unsafe([0, 0, 0x2000]);
+    let _ = a.to_be_bytes();
+}
+
+#[test(should_fail_with = "call to assert_max_bit_size")]
+fn test_to_le_bytes_rejects_out_of_range() {
+    let a: U252 = U252::from_limbs_unsafe([0, 0, 0x2000]);
+    let _ = a.to_le_bytes();
+}
+
 #[test]
 fn test_from_be_bytes_max_U252() {
     let mut bytes: [u8; 32] = [0xff; 32];
@@ -633,7 +647,7 @@ where
 
     let a: BN = BN::derive_from_seed([1, 2, 3, 4]);
     assert(a.is_zero() == false);
-    a.assert_is_not_zero();
+    assert(!a.is_zero());
 }
 
 fn test_assert_is_not_equal<let N: u32, BN>()
@@ -1010,6 +1024,11 @@ unconstrained fn test_unconstrained_div_rem_by_zero() {
 #[test(should_fail_with = "attempt to divide by zero")]
 unconstrained fn test_unconstrained_div_by_zero() {
     let _ = U256::from(7).__div(&U256::zero());
+}
+
+#[test(should_fail_with = "attempt to divide by zero")]
+unconstrained fn test_div_by_zero_unconstrained() {
+    let _ = U256::from(7) / U256::zero();
 }
 
 // ------------------------------ EXPRESSIONS TESTS ------------------------------
