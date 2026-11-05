@@ -70,10 +70,9 @@ Every shipped type has `BITS >= 254`, so `2^BITS > p`.
 | `a == b`, `a != b` | `value(a) == value(b)` | yes |
 | `a < b`, `a <= b`, `a > b`, `a >= b`, `cmp` | integer ordering of `value(a)` and `value(b)` | yes |
 | `is_zero(a)` | `value(a) == 0` | no |
-| `assert_is_not_zero(a)` | fails if `value(a) == 0` | no |
 | `assert_is_not_equal(a, b)` | fails if `value(a) ≡ value(b) (mod p)` | no |
 
-`is_zero` and `assert_is_not_zero` are correct for unchecked values, as a value whose limbs are all non-negative is zero only if every limb is zero.
+`is_zero` is correct for unchecked values, as a value whose limbs are all non-negative is zero only if every limb is zero.
 
 `assert_is_not_equal` compares values via their encodings in `Field`. It is sound (it always fails if `value(a) == value(b)`), but when `BITS >= 254` it also fails for distinct values whose difference is a multiple of `p`. See [consistency review](#consistency-review), item 2.
 
@@ -105,7 +104,6 @@ Functions prefixed with `__` generate no constraints. For canonical inputs they 
 | --- | --- | --- |
 | `__add(b)`, `__sub(b)`, `__mul(b)`, `__sqr()` | as `+`, `-`, `*`, `sqr` | never, for canonical inputs |
 | `__div_rem(b)` | as `div_rem` | `b == 0` (`attempt to divide by zero`) |
-| `__div(b)` | as `/` | `b == 0` (`attempt to divide by zero`) |
 | `__pow(e)` | `a^e mod 2^BITS`, with `0^0 = 1` | never, for canonical inputs |
 | `__eq(b)` | limb-wise equality | never |
 | `__is_zero()` | `true` if every limb is zero | never |
@@ -169,13 +167,13 @@ A function in the last class may return a wrong or non-canonical result. That is
 | `*`, `sqr` | checks | requires but does not check |
 | `/`, `%`, `div_rem` | checks | requires but does not check |
 | `==`, `!=`, `<`, `<=`, `>`, `>=`, `cmp` | checks | checks |
-| `is_zero`, `assert_is_not_zero` | correct for any limbs | correct for any limbs |
+| `is_zero` | correct for any limbs | correct for any limbs |
 | `assert_is_not_equal` | correct for any limbs (compares modulo `p`) | correct for any limbs (compares modulo `p`) |
 | `to_field` | checks | checks |
 | `to_be_bytes`, `to_le_bytes` | checks, for widths with `BITS % 8 == 0` | checks, for widths with `BITS % 8 == 0` |
 | `evaluate_quadratic_expression` | checks | checks |
 | `set_limb` | checks the new limb only | checks the new limb only |
-| `__add`, `__sub`, `__mul`, `__sqr`, `__pow`, `__div`, `__div_rem`, `compute_quadratic_expression` | — | requires but does not check |
+| `__add`, `__sub`, `__mul`, `__sqr`, `__pow`, `__div_rem`, `compute_quadratic_expression` | — | requires but does not check |
 | `__eq` | — | requires but does not check (compares limbs, not values) |
 | `__is_zero` | — | correct for any limbs |
 
