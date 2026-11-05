@@ -78,25 +78,6 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
     /// Returns the limb at the given index.
     fn get_limb(&self, idx: u32) -> u128;
 
-    /// Generates a deterministic pseudorandom BigInt from a seed.
-    ///
-    /// Uses Poseidon2 hash to derive `BITS * 2` bits of entropy, then reduces modulo `MOD`.
-    ///
-    /// # Security Warning
-    /// **NOT cryptographically secure for all use cases**. The output is deterministic and
-    /// uniformly distributed modulo `MOD`, but the seed-to-output mapping is publicly computable.
-    /// Do not use for secret key generation where the seed might be guessable.
-    ///
-    /// # Constrained
-    /// This is a constrained function that generates range check constraints.
-    fn derive_from_seed<let SeedBytes: u32>(seed: [u8; SeedBytes]) -> Self;
-
-    /// Unconstrained version of `derive_from_seed`.
-    ///
-    /// # Safety
-    /// No constraints are generated. Use only for witness computation in unconstrained contexts.
-    unconstrained fn __derive_from_seed<let SeedBytes: u32>(seed: [u8; SeedBytes]) -> Self;
-
     /// Constructs a BigInt from big-endian bytes.
     ///
     /// The byte array length must be exactly `(BITS + 7) / 8`.
@@ -322,14 +303,6 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
                 let mut limbs = [0; $N];
                 limbs[0] = 1;
                 Self { limbs }
-            }
-
-            fn derive_from_seed<let SeedBytes: u32>(seed: [u8; SeedBytes]) -> Self {
-                $typ::from_limbs($crate::internal::derive_from_seed::<$N, $BITS, SeedBytes>(seed))
-            }
-
-            unconstrained fn __derive_from_seed<let SeedBytes: u32>(seed: [u8; SeedBytes]) -> Self {
-                Self { limbs: $crate::internal::__derive_from_seed::<$N, $BITS, SeedBytes>(seed) }
             }
 
             fn from_be_bytes(x: [u8; ($BITS + 7) / 8]) -> Self {

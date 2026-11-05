@@ -131,6 +131,11 @@ unconstrained fn __split_bits<let LOW_BITS: u32>(x: Field) -> (Field, Field) {
 ///  As `MOD` is a power of two, a uniformly random value modulo `MOD` is just its
 ///  `BITS` least significant bits. We therefore fill the lower `N - 1` limbs with
 ///  120 bits each, and the top limb with the remaining `BITS - 120 * (N - 1)` bits.
+///
+/// The output is a deterministic, publicly computable function of the seed, intended for testing.
+/// Do not use it where the seed is secret or guessable.
+///
+/// Fails if the seed has 256 or more bytes.
 pub fn derive_from_seed<let N: u32, let BITS: u32, let SeedBytes: u32>(
     seed: [u8; SeedBytes],
 ) -> [u128; N] {

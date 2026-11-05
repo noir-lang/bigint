@@ -48,9 +48,6 @@ Every shipped type has `BITS >= 254`, so `2^BITS > p`.
 | `set_limb(i, v)` | sets `limbs[i] = v` | `i >= N`, or `v >= 2^120` (`i < N - 1`) or `v >= 2^TOP` (`i = N - 1`) |
 | `set_limb_unsafe(i, v)` | sets `limbs[i] = v`, unchecked | `i >= N` |
 | `validate_in_range()` | nothing | the value is not canonical |
-| `derive_from_seed(seed)`, `__derive_from_seed(seed)` | a pseudorandom canonical value | `seed` has 256 or more bytes |
-
-`derive_from_seed` is a deterministic, public function of `seed`, built from Poseidon2. Its output should be close to uniform over `[0, 2^BITS)`. It is intended for testing, and must not be used where the seed is secret or guessable. The constrained and unconstrained versions return the same value.
 
 ## Conversions
 
@@ -211,7 +208,5 @@ Known inconsistencies on `main`, and the open pull requests which address them.
 5. **`compute_quadratic_expression` returns a quotient which includes internal offsets.** When any flag is set, `q` is not the quotient of `E` by `2^BITS`, and it may not be a valid value of `T`. #8 changes the function to return the value of the expression instead.
 6. **Documentation drift.** These comments disagree with the code:
    - The `BigInt` trait documentation says negation wraps; negation has been removed. It says single-limb types "may produce incorrect results"; `derive_bigint` rejects them at compile time.
-   - `derive_from_seed` says it derives `BITS * 2` bits and reduces modulo `MOD`. It truncates hash output to `BITS` bits.
    - The `add` and `sub` "limitations" sections in `src/fns/constrained_ops.nr` describe spurious witnesses when `lhs + rhs + MOD < 2^BITS`. As `MOD = 2^BITS` for every type, this cannot happen.
    - `compute_linear_expressions` refers to a test, `test_evaluate_quadratic_expression_limb_overflow`, which does not exist.
-   - The 256-byte limit on `derive_from_seed` seeds is not documented on the trait.

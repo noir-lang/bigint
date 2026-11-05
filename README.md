@@ -103,7 +103,6 @@ These generate no constraints. Their results must be constrained, ideally with `
 - `from_limbs` (range-checks the limbs), `from_limbs_unsafe` (does not; the result must be range-checked with `validate_in_range` before use)
 - `get_limbs`, `get_limb(idx)`
 - `set_limb(idx, value)` (range-checks the new value), `set_limb_unsafe(idx, value)` (does not)
-- `derive_from_seed`, `__derive_from_seed`: deterministically derive a value from a byte seed. Not cryptographically secure; intended for testing.
 
 ### Conversions
 
