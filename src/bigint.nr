@@ -9,8 +9,8 @@ use std::ops::{Add, Div, Mul, Rem, Sub};
 ///
 /// # Important Notes
 ///
-/// - **Single-limb BigInt is not supported**: This library assumes at least two 120-bit limbs
-///   (`BITS > 120`). Operations on single-limb BigInts may produce incorrect results.
+/// - **At least two limbs**: `derive_bigint` requires at least two 120-bit limbs (`BITS > 120`),
+///   and rejects narrower types at compile time.
 ///
 /// - **Constrained vs Unconstrained**: Methods prefixed with `__` are unconstrained and do not
 ///   generate circuit constraints. Use them for witness computation, then constrain results with
