@@ -212,7 +212,9 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
     /// - Limb N-1 is < 2^(BITS - 120*(N-1))
     ///
     /// # When to Use
-    /// Call this after `from_limbs()` or `set_limb()` when the input comes from untrusted sources.
+    /// `from_limbs`, `set_limb` and all operations already range-check their results. Call this on
+    /// values which bypass them: values built with `from_limbs_unsafe` or `set_limb_unsafe`,
+    /// circuit inputs, and values returned from unconstrained functions.
     ///
     /// # Performance Note
     /// Range constraints are deduplicated per value, so calling this multiple times on the same
@@ -684,7 +686,7 @@ pub fn evaluate_quadratic_expression<T: BigInt, let LHS_N: u32, let RHS_N: u32, 
 ///
 /// # Requirements
 /// - The BigInt value must be less than the circuit field modulus (Grumpkin: ~2^254)
-/// - For N > 2, the value is validated to be less than the Grumpkin modulus
+/// - For `BITS >= 254`, the value is validated to be less than the Grumpkin modulus
 ///
 /// # Panics
 /// - Fails range validation if the value is >= circuit field modulus
