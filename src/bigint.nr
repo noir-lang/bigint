@@ -261,7 +261,7 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
         f"derive_bigint: a {BITS}-bit integer needs {expected_limbs} limbs, but `limbs` has {N}",
     );
     assert(N >= 2, "derive_bigint: at least two limbs are required");
-    // Multiplication of wider types would require carries of more than 127 bits, see `carry_bits`
+    // Multiplication of wider types would require carries of more than 127 bits, see `uses_wide_carries`
     assert(N <= 129, "derive_bigint: at most 129 limbs are supported");
     let top_limb_bits: u32 = BITS - (N - 1) * 120;
     assert(

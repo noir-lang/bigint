@@ -1202,7 +1202,7 @@ fn test_mul_u4096() {
     test_mul::<35, crate::types::U4096::U4096>();
 }
 
-// `U8192` has 69 limbs, so its products need 127-bit carries (see `carry_bits`)
+// `U8192` has 69 limbs, so its products need 127-bit carries (see `uses_wide_carries`)
 #[test]
 fn test_mul_u8192() {
     test_mul::<69, crate::types::U8192::U8192>();
