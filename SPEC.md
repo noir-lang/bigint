@@ -12,7 +12,7 @@ Every pull request which changes behaviour must update this document in the same
 - A value is **canonical** if limbs `0..N-2` are below `2^120` and the top limb is below `2^TOP`. Every canonical value is in `[0, 2^BITS)` and every integer in `[0, 2^BITS)` has exactly one canonical representation.
 - An operation **range-checks** a value if it fails unless the value is canonical.
 - An operation **fails** if no valid proof exists for it. For constrained code this is a constraint failure; most failures also abort execution with an assertion message. Unconstrained functions fail by aborting execution.
-- **Unchecked values** are values which may not be canonical: circuit inputs (whose limbs are only known to be `u128`s), values returned from unconstrained functions, and values built with `from_limbs_unsafe` or `set_limb_unsafe`.
+- **Unchecked values** are values which may not be canonical: circuit inputs (whose limbs are only known to be `u128`s), values returned from unconstrained functions, and values built with `from_limbs_unsafe` or `set_limb_unsafe`. As limbs have type `u128`, every limb of every value is below `2^128`. A non-canonical value may encode an integer in `[0, 2^BITS)` with different limbs (e.g. `[2^120, 0, 0]` for `2^120`), or an integer `>= 2^BITS`. [Canonical inputs](#canonical-inputs) describes how each function handles them.
 
 ## Types
 
@@ -114,7 +114,7 @@ Functions prefixed with `__` generate no constraints. For canonical inputs they 
 
 ### Constrained functions in unconstrained code
 
-When called from unconstrained code, `+`, `-`, `*`, `sqr`, `/`, `udiv_mod`, `umod` and `From<Field>` skip their checks and return the unconstrained result. All other functions perform their checks as assertions.
+When called from unconstrained code, `+`, `-`, `*`, `sqr`, `/`, `udiv_mod`, `umod` and `From<Field>` skip their checks and return the unconstrained result. All other functions perform their checks as assertions. The results agree with constrained execution for canonical inputs, but not for unchecked inputs: see [canonical inputs](#canonical-inputs).
 
 ## Quadratic expressions
 
@@ -153,13 +153,57 @@ pub unconstrained fn compute_quadratic_expression<T: BigInt, ...>(/* as above */
 
 Returns `(q, r)`, where `r = E mod 2^BITS` is canonical. `q` is the quotient `floor(E' / 2^BITS)`, where `E'` is `E` with every negated term `x` replaced by `2^(BITS + 1) - x`. `q` is not range-checked and may not be a valid value of `T`. See [consistency review](#consistency-review), item 7.
 
+## Canonical inputs
+
+Every function falls into one of three classes for unchecked inputs:
+
+- **Checks**: the function fails unless its inputs are canonical.
+- **Correct for any limbs**: the function's result depends only on the integer values of its inputs, so it does not need canonical inputs. It may still fail if an input is too large.
+- **Requires but does not check**: the function is only specified for canonical inputs. For other inputs it returns an unspecified result without failing.
+
+A function in the last class may return a wrong or non-canonical result. That is acceptable only where the result is constrained afterwards, as for witness hints. It is not acceptable for code whose result is used as is, e.g. unconstrained programs.
+
+| Function | Constrained execution | Unconstrained execution |
+| --- | --- | --- |
+| `+`, `-` | correct for any limbs (fails if the result cannot be reduced with a single `2^BITS`) | requires but does not check |
+| `*`, `sqr` | checks | requires but does not check |
+| `/`, `udiv_mod`, `umod` | checks | requires but does not check |
+| `==`, `!=`, `<`, `<=`, `>`, `>=`, `cmp` | checks | checks |
+| `is_zero`, `assert_is_not_zero` | correct for any limbs | correct for any limbs |
+| `assert_is_not_equal` | correct for any limbs (compares modulo `p`) | correct for any limbs (compares modulo `p`) |
+| `to_field` | checks | checks |
+| `to_be_bytes`, `to_le_bytes` | checks, for widths with `BITS % 8 == 0` | checks, for widths with `BITS % 8 == 0` |
+| `evaluate_quadratic_expression` | checks | checks |
+| `set_limb` | checks the new limb only | checks the new limb only |
+| `__add`, `__sub`, `__mul`, `__sqr`, `__pow`, `__div`, `__udiv_mod`, `compute_quadratic_expression` | — | requires but does not check |
+| `__eq` | — | requires but does not check (compares limbs, not values) |
+| `__is_zero` | — | correct for any limbs |
+
+Observed results on `main` for `U256`, with `a = [2^120, 0, 0]` (`2^120` with non-canonical limbs) and `b = [0, 0, 2^17]` (`2^257`):
+
+| Expression | Constrained | Unconstrained |
+| --- | --- | --- |
+| `a + 1` | `[1, 1, 0]` (correct) | — |
+| `b + 0` | fails | `[0, 0, 2^16]`, i.e. `2^256`: not a valid `U256` (correct: `0`) |
+| `a * 1` | fails | `[0, 1, 0]` (correct) |
+| `a / 1` | fails | `[2^120 - 1, 0, 0]`: wrong (correct: `2^120`) |
+| `b / 1` | fails | `[0, 0, 2^17]`: not a valid `U256` |
+| `a == [0, 1, 0]` | fails | fails |
+| `a.__eq([0, 1, 0])` | — | `false`, although the values are equal |
+| `a.assert_is_not_equal([0, 1, 0])` | fails (the values are equal) | — |
+
+So in constrained execution no function returns a wrong result for unchecked inputs. In unconstrained execution, the same operator can return a wrong result where constrained execution fails. See [consistency review](#consistency-review), item 3.
+
 ## Consistency review
 
 Known inconsistencies on `main`, and the open pull requests which address them.
 
 1. **`U8192` cannot do arithmetic.** `*`, `sqr`, `/`, `umod`, `udiv_mod` and `evaluate_quadratic_expression` all fail to compile for types with `N > 65`, which includes the shipped `U8192`. This is far stricter than for every other shipped type. Addressed by #18.
 2. **`assert_is_not_equal` has a stricter precondition than `!=`.** For every shipped type (`BITS >= 254`) it fails for distinct values congruent modulo `p`, whereas `assert(a != b)` does not. An honest prover with such values cannot produce a proof. Not addressed.
-3. **`+` and `-` do not range-check their inputs; every other binary operation does.** The results are still correct modulo `2^BITS` (see [arithmetic](#arithmetic)), so this is not unsound, but the behaviour on unchecked inputs differs: `a + b` succeeds where `a == b` or `a * b` fails. #20 documents the behaviour.
+3. **Canonical-input handling differs between functions and between execution modes** (see [canonical inputs](#canonical-inputs)):
+   - In unconstrained execution, `+`, `-`, `*`, `sqr`, `/`, `udiv_mod`, `umod` and the `__` functions require canonical inputs but do not check them, and can return wrong or non-canonical results (e.g. `[2^120, 0, 0] / 1` returns `2^120 - 1`). In constrained execution the same operators either check or are correct for any limbs. `==` and the comparisons check in both modes. Not addressed.
+   - In constrained execution, `+` and `-` are correct for any limbs, while every other binary operation checks. This is sound, but `a + b` succeeds where `a == b` or `a * b` fails. #20 documents this.
+   - `__eq` compares limbs, so it returns `false` for different encodings of the same value, where `==` fails. Not addressed.
 4. **Unconstrained `From<Field>` does not check the width.** For a custom type with `BITS <= 253`, the constrained conversion fails for `x >= 2^BITS`, but the unconstrained one returns non-canonical limbs. Addressed by #16.
 5. **`to_be_bytes` and `to_le_bytes` only range-check the top limb to a byte boundary.** For a custom type with `BITS % 8 != 0`, they can serialize a non-canonical value into bytes which `from_be_bytes` rejects. Addressed by #19.
 6. **The expression size bound ignores negated terms.** The compile-time check bounds the product limbs for unnegated terms only, so it may accept expressions which an honest prover cannot prove. The code comments describe this, but no test covers it. Not addressed.
