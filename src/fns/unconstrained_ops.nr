@@ -13,7 +13,7 @@ use crate::constants::TWO_POW_120;
 
 /// Deterministically derives a `BigInt` from a seed value (unconstrained)
 ///
-/// Takes a seed byte array and generates a `BigInt` in the range [0, modulus-1].
+/// Takes a seed byte array and generates a `BigInt` in the range [0, 2^BITS).
 ///
 /// See more information in `constrained_ops.nr`: `derive_from_seed`
 pub unconstrained fn __derive_from_seed<let N: u32, let BITS: u32, let SeedBytes: u32>(

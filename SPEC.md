@@ -211,15 +211,12 @@ Known inconsistencies on `main`, and the open pull requests which address them.
 2. **`assert_is_not_equal` has a stricter precondition than `!=`.** For every shipped type (`BITS >= 254`) it fails for distinct values congruent modulo `p`, whereas `assert(a != b)` does not. An honest prover with such values cannot produce a proof. Not addressed.
 3. **Canonical-input handling differs between functions and between execution modes** (see [canonical inputs](#canonical-inputs)):
    - In unconstrained execution, `-`, `*`, `/`, `%`, `div_rem` and the `__` functions other than `__add` require canonical inputs but do not check them, and can return wrong or non-canonical results (e.g. `[2^120, 0, 0] / 1` returns `2^120 - 1`, `[2^127, 0, 0]^2` returns `2^254 mod p`, and `[0, 0, 2^17] - 0` returns `2^257`). In constrained execution the same operators either check or never return an incorrect result. `==` and the comparisons check in both modes. Not addressed.
-   - In constrained execution, `+` and `-` do not check their inputs, while every other binary operation does. They never return an incorrect result, but `a + b` may succeed where `a == b` or `a * b` fails, and may also fail for non-canonical inputs whose sum is in range. #20 documents this.
+   - In constrained execution, `+` and `-` do not check their inputs, while every other binary operation does. They never return an incorrect result, but `a + b` may succeed where `a == b` or `a * b` fails, and may also fail for non-canonical inputs whose sum is in range. The README documents this.
    - `__eq` compares limbs, so it returns `false` for different encodings of the same value, where `==` fails. Not addressed.
 4. **The expression size bound ignores negated terms.** The compile-time check bounds the product limbs for unnegated terms only, so it may accept expressions which an honest prover cannot prove. The code comments describe this, but no test covers it. Not addressed.
 5. **`compute_quadratic_expression` returns a quotient which includes internal offsets.** When any flag is set, `q` is not the quotient of `E` by `2^BITS`, and it may not be a valid value of `T`. #8 changes the function to return the value of the expression instead.
 6. **Documentation drift.** These comments disagree with the code:
    - The `BigInt` trait documentation says single-limb types "may produce incorrect results"; `derive_bigint` rejects them at compile time.
-   - The doc comments of `compute_quadratic_expression` and `evaluate_quadratic_expression` describe `product(lhs_terms[i])`. The code computes a sum, as the README says.
    - `derive_from_seed` says it derives `BITS * 2` bits and reduces modulo `MOD`. It truncates hash output to `BITS` bits.
    - `compute_linear_expressions` refers to a test, `test_evaluate_quadratic_expression_limb_overflow`, which does not exist.
    - The 256-byte limit on `derive_from_seed` seeds is not documented on the trait.
-
-   #20 fixes some of these.
