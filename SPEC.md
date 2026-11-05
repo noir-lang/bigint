@@ -93,7 +93,7 @@ Every shipped type has `BITS >= 254`, so `2^BITS > p`.
 
 Division by zero fails with `attempt to divide by zero`. The circuit itself also rejects it, as it requires `remainder < divisor`.
 
-`+` and `-` are correct for any limbs: for unchecked inputs the result is still the exact sum or difference of `value(a)` and `value(b)`, or the operation fails.
+For unchecked inputs, `+` and `-` never return an incorrect result: they return the exact sum or difference of `value(a)` and `value(b)`, or fail. They may fail for some non-canonical inputs even when the result is in range, e.g. `[2^120, 0, 0] - [0, 1, 0]`.
 
 The compile-time failure for `N > 65` comes from the product bound described under [quadratic expressions](#quadratic-expressions). It affects `U8192`. See [consistency review](#consistency-review), item 1.
 
@@ -157,18 +157,19 @@ Returns `(q, r)`, where `r = E mod 2^BITS` is canonical. `q` is the quotient `fl
 
 ## Canonical inputs
 
-Every function falls into one of three classes for unchecked inputs:
+Every function falls into one of four classes for unchecked inputs:
 
 - **Checks**: the function fails unless its inputs are canonical.
-- **Correct for any limbs**: the function's result depends only on the integer values of its inputs, so it does not need canonical inputs. It may still fail if an input is too large.
-- **Requires but does not check**: the function is only specified for canonical inputs. For other inputs it returns an unspecified result without failing.
+- **Correct for any limbs**: the function returns the correct result for the integer values of its inputs, whatever their limbs. It fails only if the correct result is out of range.
+- **Never incorrect**: for non-canonical inputs the function returns the correct result or fails. It may fail even if the correct result is in range.
+- **Requires but does not check**: the function is only specified for canonical inputs. For other inputs it may return a wrong or non-canonical result without failing.
 
 A function in the last class may return a wrong or non-canonical result. That is acceptable only where the result is constrained afterwards, as for witness hints. It is not acceptable for code whose result is used as is, e.g. unconstrained programs.
 
 | Function | Constrained execution | Unconstrained execution |
 | --- | --- | --- |
-| `+`, `__add` | correct for any limbs | correct for any limbs |
-| `-`, `__sub` | correct for any limbs | requires but does not check |
+| `+` | never incorrect | correct for any limbs |
+| `-` | never incorrect | requires but does not check |
 | `*`, `sqr` | checks | requires but does not check |
 | `/`, `udiv_mod`, `umod` | checks | requires but does not check |
 | `==`, `!=`, `<`, `<=`, `>`, `>=`, `cmp` | checks | checks |
@@ -178,7 +179,8 @@ A function in the last class may return a wrong or non-canonical result. That is
 | `to_be_bytes`, `to_le_bytes` | checks, for widths with `BITS % 8 == 0` | checks, for widths with `BITS % 8 == 0` |
 | `evaluate_quadratic_expression` | checks | checks |
 | `set_limb` | checks the new limb only | checks the new limb only |
-| `__mul`, `__sqr`, `__pow`, `__div`, `__udiv_mod`, `compute_quadratic_expression` | — | requires but does not check |
+| `__add` | — | correct for any limbs |
+| `__sub`, `__mul`, `__sqr`, `__pow`, `__div`, `__udiv_mod`, `compute_quadratic_expression` | — | requires but does not check |
 | `__eq` | — | requires but does not check (compares limbs, not values) |
 | `__is_zero` | — | correct for any limbs |
 
@@ -189,7 +191,8 @@ Observed results for `U256`, with `a = [2^120, 0, 0]` (`2^120` with non-canonica
 | `a + 1` | `[1, 1, 0]` (correct) | — |
 | `b + 0` | fails | fails |
 | `b - 0` | fails | `[0, 0, 2^17]`: not a valid `U256` |
-| `a - [0, 1, 0]` | `[0, 0, 0]` (correct) | fails with `attempt to subtract with overflow` (correct: `0`) |
+| `[0, 1, 0] - a` | `[0, 0, 0]` (correct) | `[0, 0, 0]` (correct) |
+| `a - [0, 1, 0]` | fails (correct: `0`) | fails with `attempt to subtract with overflow` (correct: `0`) |
 | `a * 1` | fails | `[0, 1, 0]` (correct) |
 | `a / 1` | fails | `[2^120 - 1, 0, 0]`: wrong (correct: `2^120`) |
 | `b / 1` | fails | `[0, 0, 2^17]`: not a valid `U256` |
@@ -207,7 +210,7 @@ Known inconsistencies on `main`, and the open pull requests which address them.
 2. **`assert_is_not_equal` has a stricter precondition than `!=`.** For every shipped type (`BITS >= 254`) it fails for distinct values congruent modulo `p`, whereas `assert(a != b)` does not. An honest prover with such values cannot produce a proof. Not addressed.
 3. **Canonical-input handling differs between functions and between execution modes** (see [canonical inputs](#canonical-inputs)):
    - In unconstrained execution, `-`, `*`, `sqr`, `/`, `udiv_mod`, `umod` and the `__` functions other than `__add` require canonical inputs but do not check them, and can return wrong or non-canonical results (e.g. `[2^120, 0, 0] / 1` returns `2^120 - 1`, and `[0, 0, 2^17] - 0` returns `2^257`). In constrained execution the same operators either check or are correct for any limbs. `==` and the comparisons check in both modes. Not addressed.
-   - In constrained execution, `+` and `-` are correct for any limbs, while every other binary operation checks. This is sound, but `a + b` succeeds where `a == b` or `a * b` fails. #20 documents this.
+   - In constrained execution, `+` and `-` do not check their inputs, while every other binary operation does. They never return an incorrect result, but `a + b` may succeed where `a == b` or `a * b` fails, and may also fail for non-canonical inputs whose sum is in range. #20 documents this.
    - `__eq` compares limbs, so it returns `false` for different encodings of the same value, where `==` fails. Not addressed.
 4. **Unconstrained `From<Field>` does not check the width.** For a custom type with `BITS <= 253`, the constrained conversion fails for `x >= 2^BITS`, but the unconstrained one returns non-canonical limbs. Addressed by #16.
 5. **`to_be_bytes` and `to_le_bytes` only range-check the top limb to a byte boundary.** For a custom type with `BITS % 8 != 0`, they can serialize a non-canonical value into bytes which `from_be_bytes` rejects. Addressed by #19.
