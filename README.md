@@ -114,7 +114,7 @@ These generate no constraints. Their results must be constrained, ideally with `
 ### Assertions and range checks
 
 - `is_zero`: zero check, cheaper than `== zero()`
-- `assert_is_not_equal`: cheaper than `assert(a != b)`
+- `assert_is_not_equal(a, b)`: a free function, like `to_field`. Asserts `a != b`, and is cheaper than `assert(a != b)`
 - `validate_in_range`: each limb is at most 120 bits and the value is less than $2^X$
 
 ### `evaluate_quadratic_expression`

@@ -21,7 +21,6 @@ mod tests;
 pub mod internal {
     // Constrained operations
     pub use crate::fns::constrained_ops::add;
-    pub use crate::fns::constrained_ops::assert_is_not_equal;
     pub use crate::fns::constrained_ops::cmp;
     pub use crate::fns::constrained_ops::div;
     pub use crate::fns::constrained_ops::div_rem;
@@ -50,8 +49,10 @@ pub mod internal {
 }
 
 // Re-export the main structs so that users don't have to specify the paths
+pub use bigint::{
+    assert_is_not_equal, compute_quadratic_expression, evaluate_quadratic_expression, to_field,
+};
 pub use bigint::BigInt;
-pub use bigint::{compute_quadratic_expression, evaluate_quadratic_expression, to_field};
 pub use bigint::derive_bigint;
 
 // Re-export the pre-defined bigint types, for easier access:

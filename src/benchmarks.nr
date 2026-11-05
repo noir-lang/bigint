@@ -95,7 +95,7 @@ comptime fn make_bench(m: Module, typ_path: Quoted) -> Quoted {
 
         #[export]
         fn $assert_is_not_equal_bench_name(a: $typ, b: $typ) {
-            $BigInt::assert_is_not_equal(&a, &b)
+            crate::bigint::assert_is_not_equal(a, b)
         }
 
         #[export]

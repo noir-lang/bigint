@@ -1,5 +1,7 @@
+use crate::bigint::{
+    assert_is_not_equal, compute_quadratic_expression, evaluate_quadratic_expression, to_field,
+};
 use crate::bigint::BigInt;
-use crate::bigint::{compute_quadratic_expression, evaluate_quadratic_expression, to_field};
 use crate::bigint::derive_bigint;
 use crate::constants::{GRUMPKIN_MODULUS, TWO_POW_120, TWO_POW_240};
 use crate::fns::constrained_ops::{
@@ -814,7 +816,7 @@ where
     let a: BN = derive_from_seed([1, 2, 3, 4]);
     let b: BN = derive_from_seed([4, 5, 6, 7]);
 
-    a.assert_is_not_equal(&b);
+    assert_is_not_equal(a, b);
 }
 
 fn test_assert_is_not_equal_fail<let N: u32, BN>()
@@ -824,7 +826,7 @@ where
     let a: BN = derive_from_seed([1, 2, 3, 4]);
     let b: BN = derive_from_seed([1, 2, 3, 4]);
 
-    a.assert_is_not_equal(&b);
+    assert_is_not_equal(a, b);
 }
 
 #[test]
@@ -1147,16 +1149,16 @@ unconstrained fn test_assert_is_not_equal_fail_unconstrained_U256() {
 #[test]
 fn test_assert_is_not_equal_congruent_mod_p_U256() {
     let p: U256 = U256::from_limbs(GRUMPKIN_MODULUS);
-    U256::zero().assert_is_not_equal(&p);
-    p.assert_is_not_equal(&U256::zero());
-    U256::one().assert_is_not_equal(&(p + U256::one()));
+    assert_is_not_equal(U256::zero(), p);
+    assert_is_not_equal(p, U256::zero());
+    assert_is_not_equal(U256::one(), p + U256::one());
 }
 
 #[test]
 unconstrained fn test_assert_is_not_equal_congruent_mod_p_unconstrained_U256() {
     let p: U256 = U256::from_limbs(GRUMPKIN_MODULUS);
-    U256::zero().assert_is_not_equal(&p);
-    U256::one().assert_is_not_equal(&(p + U256::one()));
+    assert_is_not_equal(U256::zero(), p);
+    assert_is_not_equal(U256::one(), p + U256::one());
 }
 
 #[test]
@@ -1166,8 +1168,8 @@ fn fuzz_assert_is_not_equal_congruent_mod_p_U256(seed: [u8; 5]) {
     let max: U256 = U256::from_limbs(U256_MAX);
     // `a + p` if it fits, and otherwise `a - p`, which is then non-negative as `2^256 < 2p`
     let b: U256 = if a <= max - p { a + p } else { a - p };
-    a.assert_is_not_equal(&b);
-    b.assert_is_not_equal(&a);
+    assert_is_not_equal(a, b);
+    assert_is_not_equal(b, a);
 }
 
 // Wider types: `x` and `x + p * y` differ by a multiple of `p`
@@ -1176,13 +1178,13 @@ fn test_assert_is_not_equal_congruent_mod_p_U2048() {
     let p: U2048 = U2048::from(U256::from_limbs(GRUMPKIN_MODULUS));
     let x: U2048 = small_from_seed([1, 2, 3, 4]);
     let y: U2048 = small_from_seed([5, 6, 7, 8]);
-    x.assert_is_not_equal(&(x + p * y));
+    assert_is_not_equal(x, x + p * y);
 }
 
 #[test]
 fn test_assert_is_not_equal_congruent_mod_p_U8192() {
     let p: U8192 = U8192::from(U256::from_limbs(GRUMPKIN_MODULUS));
-    U8192::zero().assert_is_not_equal(&p);
+    assert_is_not_equal(U8192::zero(), p);
 }
 
 // Non-canonical encodings of the same value must not be accepted as distinct
@@ -1190,7 +1192,7 @@ fn test_assert_is_not_equal_congruent_mod_p_U8192() {
 fn test_assert_is_not_equal_non_canonical_equal_U256() {
     let a: U256 = U256::from_limbs_unsafe([TWO_POW_120, 0, 0]);
     let b: U256 = U256::from_limbs([0, 1, 0]);
-    a.assert_is_not_equal(&b);
+    assert_is_not_equal(a, b);
 }
 
 // The encodings of `2^240` differ in both packed pairs of limbs
@@ -1198,14 +1200,14 @@ fn test_assert_is_not_equal_non_canonical_equal_U256() {
 fn test_assert_is_not_equal_non_canonical_equal_across_pairs_U256() {
     let a: U256 = U256::from_limbs_unsafe([0, TWO_POW_120, 0]);
     let b: U256 = U256::from_limbs([0, 0, 1]);
-    a.assert_is_not_equal(&b);
+    assert_is_not_equal(a, b);
 }
 
 #[test(should_fail)]
 unconstrained fn test_assert_is_not_equal_non_canonical_equal_unconstrained_U256() {
     let a: U256 = U256::from_limbs_unsafe([0, TWO_POW_120, 0]);
     let b: U256 = U256::from_limbs([0, 0, 1]);
-    a.assert_is_not_equal(&b);
+    assert_is_not_equal(a, b);
 }
 
 #[test]

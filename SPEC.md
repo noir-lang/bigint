@@ -197,7 +197,7 @@ A function in the last class may return a wrong or non-canonical result. That is
 | `/`, `%`, `div_rem` | checks | requires but does not check |
 | `==`, `!=`, `<`, `<=`, `>`, `>=`, `cmp` | checks | checks |
 | `is_zero` | correct for any limbs | correct for any limbs |
-| `assert_is_not_equal` | checks | checks |
+| `assert_is_not_equal(a, b)` | checks | checks |
 | `to_field` | checks | checks |
 | `From<A> for B` (widening) | checks | checks |
 | `to_be_bytes`, `to_le_bytes` | checks | checks |
@@ -223,7 +223,7 @@ Observed results for `U256`, with `a = [2^120, 0, 0]` (`2^120` with non-canonica
 | `b / 1` | fails | `[0, 0, 2^17]`: not a valid `U256` |
 | `a == [0, 1, 0]` | fails | fails |
 | `a.__eq([0, 1, 0])` | — | `false`, although the values are equal |
-| `a.assert_is_not_equal([0, 1, 0])` | fails | fails |
+| `assert_is_not_equal(a, [0, 1, 0])` | fails | fails |
 
 So in constrained execution no function returns a wrong result for unchecked inputs. In unconstrained execution, the same operator can return a wrong result where constrained execution fails. See [consistency review](#consistency-review), item 2.
 
