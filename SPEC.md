@@ -116,7 +116,7 @@ Functions prefixed with `__` generate no constraints. For canonical inputs they 
 
 ### Constrained functions in unconstrained code
 
-When called from unconstrained code, `+`, `-`, `*`, `sqr`, `/`, `udiv_mod`, `umod` skip their checks and return the unconstrained result. All other functions perform their checks as assertions. The results agree with constrained execution for canonical inputs, but not for unchecked inputs: see [canonical inputs](#canonical-inputs).
+When called from unconstrained code, `+`, `-`, `*`, `sqr`, `/`, `udiv_mod` and `umod` skip their checks and return the unconstrained result. All other functions perform their checks as assertions. The results agree with constrained execution for canonical inputs, but not for unchecked inputs: see [canonical inputs](#canonical-inputs).
 
 ## Quadratic expressions
 
