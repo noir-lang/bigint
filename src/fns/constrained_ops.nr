@@ -4,8 +4,9 @@ use crate::fns::{
     expressions::validate_mul_add_expression,
     unconstrained_helpers::{
         __from_field, compute_borrow_flags, compute_carry_flags, compute_gte_flags,
+        compute_sub_borrow_flags,
     },
-    unconstrained_ops::{__add, __mul, __sub, __udiv_mod},
+    unconstrained_ops::{__add, __div_rem, __mul, __sub},
 };
 
 use std::cmp::Ordering;
@@ -233,43 +234,14 @@ pub fn eq<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u128; N]) -> bool {
     *lhs == *rhs
 }
 
-/// Validate that `val` is not equal to zero when interpreted as an integer.
-///
-/// This enforces that at least one limb of `val` is non-zero.
-///
-/// ## Assumptions
-/// * Each limb of `val` is range-constrained to be a 120-bit value:
-///   `0 <= val[i] < 2^120`.
-/// * For our concrete fields and limb counts we have `N * 2^120 < p`,
-///   so the sum of all limbs fits strictly inside the field modulus.
-///
-/// ## Completeness
-/// If `val` is non-zero as an integer, then at least one limb is non-zero,
-/// so the integer sum of the limbs satisfies `0 < limb_sum < p`. In this
-/// case `limb_sum != 0` in the `Field`, and the assertion passes.
-///
-/// ## Soundness
-/// If all limbs of `val` are zero, then `limb_sum` is zero as an integer
-/// and as a field element, so the assertion fails. A witness representing
-/// the zero integer can never satisfy this check.
+/// Check whether a `BigInt` value is zero, i.e. all of its limbs are zero.
 ///
 /// ## Note
-/// This is slightly cheaper than doing `val != [0; N]`, as we avoid
-/// creating per-limb boolean equalities and chaining them with `and`s.
-pub fn assert_is_not_zero_integer<let N: u32>(val: &[u128; N]) {
-    assert(!is_zero_integer(val), "assert_is_not_zero_integer fail");
-}
-
-/// Check whether `val` is the zero `BigInt` in the integer sense.
-///
-/// This returns `true` iff all limbs of `val` are zero.
-///
-/// See `assert_is_not_zero_integer` for the underlying assumptions.
-///
-/// ## Note
-/// This is slightly cheaper than testing `val == [0; N]`, as we avoid
-/// creating per-limb boolean equalities and chaining them with `and`s.
-pub fn is_zero_integer<let N: u32>(val: &[u128; N]) -> bool {
+/// This sums the limbs instead of testing `val == [0; N]`, which avoids creating per-limb boolean
+/// equalities and chaining them with `and`s. As every limb is a `u128`, the sum is below
+/// `N * 2^{128}`, which is far smaller than the circuit field modulus `p`, so the sum is zero in
+/// `Field` exactly when every limb is zero. This holds even if `val` is not normalised.
+pub fn is_zero<let N: u32>(val: &[u128; N]) -> bool {
     let mut limb_sum: Field = 0;
     for i in 0..N {
         limb_sum += val[i].into();
@@ -277,14 +249,11 @@ pub fn is_zero_integer<let N: u32>(val: &[u128; N]) -> bool {
     limb_sum == 0
 }
 
-/// Validate that a `BigInt` value is not zero.
-pub fn assert_is_not_zero<let N: u32, let BITS: u32>(val: &[u128; N]) {
-    assert_is_not_zero_integer(val);
-}
-
-/// Check whether a `BigInt` value is zero.
-pub fn is_zero<let N: u32, let BITS: u32>(val: &[u128; N]) -> bool {
-    is_zero_integer(val)
+/// Validate that a `BigInt` value is not zero, i.e. at least one of its limbs is non-zero.
+///
+/// See `is_zero`.
+pub fn assert_is_not_zero<let N: u32>(val: &[u128; N]) {
+    assert(!is_zero(val), "assert_is_not_zero fail");
 }
 
 /// Validate a `BigInt` instance is correctly range constrained to contain no more than `BITS` bits
@@ -333,7 +302,7 @@ pub fn validate_in_range<let N: u32, let BITS: u32>(limbs: &[u128; N]) {
 /// And won't satisfy the range constraint, since all the limbs are < 2^120
 ///
 /// ## Note
-/// `assert_is_not_zero_integer(result)` is crucial. Without it, we could always provide
+/// `assert_is_not_zero(result)` is crucial. Without it, we could always provide
 /// two identical inputs `x`, `x` and set `borrow_flags = [false; N]`,
 /// which would satisfy the limb constraints.
 pub(crate) fn validate_gt<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u128; N]) {
@@ -346,7 +315,7 @@ pub(crate) fn validate_gt<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u12
     let result: [u128; N] = assert_sub_no_overflow::<N, BITS>(lhs, rhs, &borrow_flags);
 
     // Constrain it to be strict inequality
-    assert_is_not_zero_integer(&result);
+    assert_is_not_zero(&result);
 }
 
 /// Compute the result of lhs - rhs given borrow flags and validate it
@@ -359,7 +328,7 @@ pub(crate) fn validate_gt<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u12
 ///
 /// Also validates that the result is a valid BigInt value (each limb in range).
 /// If lhs < rhs, the result will have a negative value (wrapped in Field) and fail validation.
-fn assert_sub_no_overflow<let N: u32, let BITS: u32>(
+pub(crate) fn assert_sub_no_overflow<let N: u32, let BITS: u32>(
     lhs: &[u128; N],
     rhs: &[u128; N],
     borrow_flags: &[bool; N - 1],
@@ -462,21 +431,32 @@ pub fn add<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u128; N]) -> [u128
             __add::<N, BITS>(lhs, rhs)
         }
     } else {
-        // Safety: the carry flags are constrained by the range checks below
-        let carry_flags: [bool; N - 1] = unsafe { compute_carry_flags(lhs, rhs) };
+        // Safety: the carry flags are constrained by `assert_add_no_overflow`
+        let carry_flags: [bool; N - 1] = unsafe { compute_carry_flags::<N, BITS>(lhs, rhs) };
 
-        let mut limbs: [Field; N] = [0; N];
-        limbs[0] = (lhs[0] as Field) + (rhs[0] as Field)
-            - (carry_flags[0] as Field) * (TWO_POW_120 as Field);
-        for i in 1..N - 1 {
-            limbs[i] = (lhs[i] as Field) + (rhs[i] as Field) + (carry_flags[i - 1] as Field)
-                - (carry_flags[i] as Field) * (TWO_POW_120 as Field);
-        }
-        limbs[N - 1] =
-            (lhs[N - 1] as Field) + (rhs[N - 1] as Field) + (carry_flags[N - 2] as Field);
-
-        field_limbs_to_bigint::<N, BITS>(limbs)
+        assert_add_no_overflow::<N, BITS>(lhs, rhs, &carry_flags)
     }
+}
+
+/// Compute `lhs + rhs` from prover-provided carry flags, and constrain it not to overflow `2^BITS`.
+///
+/// See `add` for the soundness argument: any carry flags which do not yield the unique valid
+/// representation of `lhs + rhs`, or a sum `>= 2^BITS`, fail the range checks.
+pub(crate) fn assert_add_no_overflow<let N: u32, let BITS: u32>(
+    lhs: &[u128; N],
+    rhs: &[u128; N],
+    carry_flags: &[bool; N - 1],
+) -> [u128; N] {
+    let mut limbs: [Field; N] = [0; N];
+    limbs[0] =
+        (lhs[0] as Field) + (rhs[0] as Field) - (carry_flags[0] as Field) * (TWO_POW_120 as Field);
+    for i in 1..N - 1 {
+        limbs[i] = (lhs[i] as Field) + (rhs[i] as Field) + (carry_flags[i - 1] as Field)
+            - (carry_flags[i] as Field) * (TWO_POW_120 as Field);
+    }
+    limbs[N - 1] = (lhs[N - 1] as Field) + (rhs[N - 1] as Field) + (carry_flags[N - 2] as Field);
+
+    field_limbs_to_bigint::<N, BITS>(limbs)
 }
 
 /// Subtract two `BigInt` values, failing if `rhs > lhs`.
@@ -496,7 +476,7 @@ pub fn sub<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u128; N]) -> [u128
         }
     } else {
         // Safety: the borrow flags are constrained by `assert_sub_no_overflow`
-        let borrow_flags: [bool; N - 1] = unsafe { compute_borrow_flags(lhs, rhs) };
+        let borrow_flags: [bool; N - 1] = unsafe { compute_sub_borrow_flags(lhs, rhs) };
         assert_sub_no_overflow::<N, BITS>(lhs, rhs, &borrow_flags)
     }
 }
@@ -519,18 +499,12 @@ pub fn mul<let N: u32, let BITS: u32>(lhs: [u128; N], rhs: [u128; N]) -> [u128; 
     result
 }
 
-/// Square a `BigInt` value, failing if the result overflows `2^BITS`.
-///
-/// See `mul`.
-pub fn sqr<let N: u32, let BITS: u32>(val: [u128; N]) -> [u128; N] {
-    mul::<N, BITS>(val, val)
-}
-
 /// Compute the `BigInt` integer division with remainder
 ///
 /// Computes `quotient = floor(numerator / divisor)` and
-/// `remainder = numerator % divisor` by:
-///   1. Computing `(quotient, remainder)` out of circuit via `__udiv_mod`.
+/// `remainder = numerator % divisor`, i.e. Euclidean division (which coincides with floored and
+/// truncated division for unsigned integers), by:
+///   1. Computing `(quotient, remainder)` out of circuit via `__div_rem`.
 ///   2. Constraining the quadratic relation
 ///        quotient * divisor + remainder - numerator = 0
 ///      with `validate_mul_add_expression`.
@@ -550,12 +524,12 @@ pub fn sqr<let N: u32, let BITS: u32>(val: [u128; N]) -> [u128; N] {
 /// ## Note
 /// Enforcing `divisor != 0` is not necessary. `remainder < divisor`
 /// Already enforces this.
-pub fn udiv_mod<let N: u32, let BITS: u32>(
+pub fn div_rem<let N: u32, let BITS: u32>(
     numerator: &[u128; N],
     divisor: &[u128; N],
 ) -> ([u128; N], [u128; N]) {
-    // Safety: We constrain the result of __udiv_mod immediately after
-    let (quotient, remainder): ([u128; N], [u128; N]) = unsafe { __udiv_mod(numerator, divisor) };
+    // Safety: We constrain the result of __div_rem immediately after
+    let (quotient, remainder): ([u128; N], [u128; N]) = unsafe { __div_rem(numerator, divisor) };
     if !std::runtime::is_unconstrained() {
         // quotient * divisor + remainder - numerator = 0
         validate_mul_add_expression::<N, BITS>(&quotient, divisor, &remainder, numerator);
@@ -568,15 +542,15 @@ pub fn udiv_mod<let N: u32, let BITS: u32>(
 /// Compute the `BigInt` integer division.
 ///
 /// Returns `floor(numerator / divisor)`.
-/// All constraints and soundness details are handled inside `udiv_mod`.
+/// All constraints and soundness details are handled inside `div_rem`.
 pub fn div<let N: u32, let BITS: u32>(numerator: &[u128; N], divisor: &[u128; N]) -> [u128; N] {
-    udiv_mod::<N, BITS>(numerator, divisor).0
+    div_rem::<N, BITS>(numerator, divisor).0
 }
 
 /// Compute the `BigInt` remainder.
 ///
 /// Returns `numerator % divisor`.
-/// All constraints and soundness details are handled inside `udiv_mod`.
-pub fn umod<let N: u32, let BITS: u32>(numerator: &[u128; N], divisor: &[u128; N]) -> [u128; N] {
-    udiv_mod::<N, BITS>(numerator, divisor).1
+/// All constraints and soundness details are handled inside `div_rem`.
+pub fn rem<let N: u32, let BITS: u32>(numerator: &[u128; N], divisor: &[u128; N]) -> [u128; N] {
+    div_rem::<N, BITS>(numerator, divisor).1
 }
