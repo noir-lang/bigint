@@ -39,16 +39,6 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
     /// Bit width of this BigInt.
     let BITS: u32;
 
-    /// Returns the number of limbs used to represent this BigInt.
-    ///
-    /// Note: Takes a dummy `Self` parameter for trait method resolution.
-    fn num_limbs(_: Self) -> u32;
-
-    /// Creates a new BigInt with value 0.
-    ///
-    /// Equivalent to `zero()`.
-    fn new() -> Self;
-
     /// Returns the additive identity (0).
     fn zero() -> Self;
 
@@ -168,12 +158,6 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
     /// No constraints are generated. Constrain the result using `evaluate_quadratic_expression`.
     unconstrained fn __mul(&self, other: &Self) -> Self;
 
-    /// Unconstrained squaring: computes `self * self (mod 2^BITS)`.
-    ///
-    /// # Safety
-    /// No constraints are generated. Constrain the result using `evaluate_quadratic_expression`.
-    unconstrained fn __sqr(&self) -> Self;
-
     /// Unconstrained unsigned integer division: computes `floor(self / other)`.
     ///
     /// # Requirements
@@ -229,12 +213,6 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
     /// Range constraints are deduplicated per value, so calling this multiple times on the same
     /// BigInt does not add duplicate constraints.
     fn validate_in_range(&self);
-
-    /// Constrained squaring: computes `self * self (mod 2^BITS)`.
-    ///
-    /// # Performance Note
-    /// For multiple operations, prefer using `__sqr()` followed by `evaluate_quadratic_expression`.
-    fn sqr(&self) -> Self;
 
     /// Constrained integer division with remainder.
     ///
@@ -308,14 +286,6 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
             let N: u32 = $N; 
             let BITS: u32 = $BITS;
             
-            fn num_limbs(_: Self) -> u32 {
-                $N
-            }
-
-            fn new() -> Self {
-                Self {limbs: [0; $N]}
-            }
-
             fn from_limbs(limbs: [u128; $N]) -> Self {
                 let res = Self { limbs };
                 res.validate_in_range();
@@ -401,10 +371,6 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
                 Self {limbs: $crate::internal::__mul::<$N, $BITS>(&self.get_limbs(), &other.get_limbs())}
             }
 
-            unconstrained fn __sqr(&self) -> Self {
-                Self {limbs: $crate::internal::__sqr::<$N, $BITS>(&self.get_limbs()) }
-            }
-
             unconstrained fn __div(&self, divisor: &Self) -> Self {
                 Self { limbs: $crate::internal::__div_rem(&self.get_limbs(), &divisor.get_limbs()).0 }
             }
@@ -432,10 +398,6 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
                 $crate::internal::validate_in_range::<$N, $BITS>(&limbs);
             }
 
-            fn sqr(&self) -> Self {
-                Self { limbs: $crate::internal::sqr::<$N, $BITS>(self.get_limbs()) }
-            }
-
             fn div_rem(&self, divisor: &Self) -> (Self, Self) {
                 let self_limbs = self.get_limbs();
                 let divisor_limbs = divisor.get_limbs();
@@ -445,7 +407,7 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
 
             fn is_zero(&self) -> bool {
                 let limbs = self.get_limbs();
-                $crate::internal::is_zero::<$N, $BITS>(&limbs)
+                $crate::internal::is_zero(&limbs)
             }
 
         }
@@ -460,6 +422,49 @@ pub comptime fn derive_bigint(strukt: TypeDefinition, BITS: u32) -> Quoted {
         impl std::convert::From<Field> for $typ {
             fn from(input: Field) -> Self {
                 $typ { limbs: $crate::internal::from_field::<$N, $BITS>(input) }
+            }
+        }
+
+        impl std::convert::From<u8> for $typ {
+            fn from(input: u8) -> Self {
+                // Every `u8` fits in the bottom limb, and every `BigInt` has at least two limbs
+                let mut limbs: [u128; $N] = [0; $N];
+                limbs[0] = input as u128;
+                $typ { limbs }
+            }
+        }
+
+        impl std::convert::From<u16> for $typ {
+            fn from(input: u16) -> Self {
+                // Every `u16` fits in the bottom limb, and every `BigInt` has at least two limbs
+                let mut limbs: [u128; $N] = [0; $N];
+                limbs[0] = input as u128;
+                $typ { limbs }
+            }
+        }
+
+        impl std::convert::From<u32> for $typ {
+            fn from(input: u32) -> Self {
+                // Every `u32` fits in the bottom limb, and every `BigInt` has at least two limbs
+                let mut limbs: [u128; $N] = [0; $N];
+                limbs[0] = input as u128;
+                $typ { limbs }
+            }
+        }
+
+        impl std::convert::From<u64> for $typ {
+            fn from(input: u64) -> Self {
+                // Every `u64` fits in the bottom limb, and every `BigInt` has at least two limbs
+                let mut limbs: [u128; $N] = [0; $N];
+                limbs[0] = input as u128;
+                $typ { limbs }
+            }
+        }
+
+        impl std::convert::From<u128> for $typ {
+            fn from(input: u128) -> Self {
+                // A `u128` may not fit in the bottom limb, or in a `BigInt` narrower than 128 bits
+                $typ { limbs: $crate::internal::from_field::<$N, $BITS>(input as Field) }
             }
         }
 
