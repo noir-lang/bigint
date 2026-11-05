@@ -1184,10 +1184,10 @@ fn test_mul_div_u8192_max() {
     let a: U8192 = U8192::from_limbs([TWO_POW_120 - 1; 34].concat([0xffff]).concat([0; 34]));
     let square: U8192 = a * a;
     assert(square.get_limb(0) == 1);
-    let (q, r): (U8192, U8192) = square.udiv_mod(&a);
+    let (q, r): (U8192, U8192) = square.div_rem(&a);
     assert(q == a);
     assert(r == U8192::zero());
-    assert(square.umod(&a) == U8192::zero());
+    assert(square % a == U8192::zero());
 }
 
 #[test]
