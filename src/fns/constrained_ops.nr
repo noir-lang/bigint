@@ -4,6 +4,7 @@ use crate::fns::{
     expressions::{evaluate_quadratic_expression, validate_udiv_mod_expression},
     unconstrained_helpers::{
         __from_field, compute_borrow_flags, compute_carry_flags, compute_gte_flags,
+        compute_sub_borrow_flags,
     },
     unconstrained_ops::{__add, __mul, __sqr, __sub, __udiv_mod},
 };
@@ -375,7 +376,7 @@ pub(crate) fn validate_gt<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u12
 ///
 /// Also validates that the result is a valid BigInt value (each limb in range).
 /// If lhs < rhs, the result will have a negative value (wrapped in Field) and fail validation.
-fn assert_sub_no_overflow<let N: u32, let BITS: u32>(
+pub(crate) fn assert_sub_no_overflow<let N: u32, let BITS: u32>(
     lhs: &[u128; N],
     rhs: &[u128; N],
     borrow_flags: &[bool; N - 1],
@@ -552,21 +553,32 @@ pub fn add<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u128; N]) -> [u128
             __add::<N, BITS>(lhs, rhs)
         }
     } else {
-        // Safety: the carry flags are constrained by the range checks below
-        let carry_flags: [bool; N - 1] = unsafe { compute_carry_flags(lhs, rhs) };
+        // Safety: the carry flags are constrained by `assert_add_no_overflow`
+        let carry_flags: [bool; N - 1] = unsafe { compute_carry_flags::<N, BITS>(lhs, rhs) };
 
-        let mut limbs: [Field; N] = [0; N];
-        limbs[0] = (lhs[0] as Field) + (rhs[0] as Field)
-            - (carry_flags[0] as Field) * (TWO_POW_120 as Field);
-        for i in 1..N - 1 {
-            limbs[i] = (lhs[i] as Field) + (rhs[i] as Field) + (carry_flags[i - 1] as Field)
-                - (carry_flags[i] as Field) * (TWO_POW_120 as Field);
-        }
-        limbs[N - 1] =
-            (lhs[N - 1] as Field) + (rhs[N - 1] as Field) + (carry_flags[N - 2] as Field);
-
-        field_limbs_to_bigint::<N, BITS>(limbs)
+        assert_add_no_overflow::<N, BITS>(lhs, rhs, &carry_flags)
     }
+}
+
+/// Compute `lhs + rhs` from prover-provided carry flags, and constrain it not to overflow `2^BITS`.
+///
+/// See `add` for the soundness argument: any carry flags which do not yield the unique valid
+/// representation of `lhs + rhs`, or a sum `>= 2^BITS`, fail the range checks.
+pub(crate) fn assert_add_no_overflow<let N: u32, let BITS: u32>(
+    lhs: &[u128; N],
+    rhs: &[u128; N],
+    carry_flags: &[bool; N - 1],
+) -> [u128; N] {
+    let mut limbs: [Field; N] = [0; N];
+    limbs[0] =
+        (lhs[0] as Field) + (rhs[0] as Field) - (carry_flags[0] as Field) * (TWO_POW_120 as Field);
+    for i in 1..N - 1 {
+        limbs[i] = (lhs[i] as Field) + (rhs[i] as Field) + (carry_flags[i - 1] as Field)
+            - (carry_flags[i] as Field) * (TWO_POW_120 as Field);
+    }
+    limbs[N - 1] = (lhs[N - 1] as Field) + (rhs[N - 1] as Field) + (carry_flags[N - 2] as Field);
+
+    field_limbs_to_bigint::<N, BITS>(limbs)
 }
 
 /// Subtract two `BigInt` values, failing if `rhs > lhs`.
@@ -586,7 +598,7 @@ pub fn sub<let N: u32, let BITS: u32>(lhs: &[u128; N], rhs: &[u128; N]) -> [u128
         }
     } else {
         // Safety: the borrow flags are constrained by `assert_sub_no_overflow`
-        let borrow_flags: [bool; N - 1] = unsafe { compute_borrow_flags(lhs, rhs) };
+        let borrow_flags: [bool; N - 1] = unsafe { compute_sub_borrow_flags(lhs, rhs) };
         assert_sub_no_overflow::<N, BITS>(lhs, rhs, &borrow_flags)
     }
 }
