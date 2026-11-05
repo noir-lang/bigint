@@ -120,16 +120,15 @@ These generate no constraints. Their results must be constrained, ideally with `
 
 ### `evaluate_quadratic_expression`
 
-Every constrained operator performs its own reduction and range checks, which makes chaining several of them expensive. A cheaper approach is to compute the result with unconstrained functions and then constrain the whole relation at once:
+Every constrained operator range-checks its own result and checks its own relation, which makes chaining several of them expensive. A cheaper approach is to compute the result with unconstrained code and then constrain the whole relation at once:
 
 ```rust
-use bigint::{BigInt, U256};
-use bigint::evaluate_quadratic_expression;
+use bigint::{compute_quadratic_expression, evaluate_quadratic_expression, U256};
 
 // Check that (x1 * x2) + x3 == expected
 fn main(x1: U256, x2: U256, x3: U256, expected: U256) {
     // Safety: the result is constrained below
-    let res = unsafe { x1.__mul(&x2).__add(&x3) };
+    let res = unsafe { compute_quadratic_expression([[x1]], [[false]], [[x2]], [[false]], [x3], [false]) };
 
     // Constrain (x1 * x2) + x3 - res == 0
     evaluate_quadratic_expression(
@@ -166,11 +165,13 @@ over the integers, where a `true` flag negates the corresponding term. As every 
 
 Only the terms are range-checked: intermediate values within the expression may exceed $2^X$ or be negative, as long as the relation holds. For example, with `a = 2^128` and `d = 2^128 - 1`, the relation `a * a - a * d - r = 0` holds for `r = 2^128` in `U256`, even though `a * a = 2^256` does not fit in a `U256` (so computing `a * a - a * d` with the checked operators fails). This makes expressions useful for relations which cannot be computed step by step, such as checking `a * b == c * d` when the products exceed $2^X$.
 
-Combining several operations into one expression is also cheaper than using the operators, as only the terms are range-checked and the relation is checked once. For example, `a * b + c * d` costs 55 gates for `U256` (952 for `U2048`) on top of range-checking the inputs, compared to 90 (1,190) using `*` and `+`. For a single product, `*` is cheaper.
+Combining several operations into one expression is also cheaper than using the operators, as only the terms are range-checked and the relation is checked once. For example, `a * b + c * d` costs 55 gates for `U256` (952 for `U2048`) on top of range-checking the inputs, compared to 90 (1,190) using `*` and `+`, when the result is computed in a single unconstrained call (see below). For a single product, `*` is cheaper.
 
 The combination of `NUM_PRODUCTS`, `LHS_N` and `RHS_N` must be small enough that intermediate product limbs do not exceed $2^{246}$. This is enforced, and expressions which could overflow are rejected. As a rough guide, keep `NUM_PRODUCTS * LHS_N * RHS_N` well below 64.
 
 `compute_quadratic_expression` is the unconstrained counterpart: it returns the value of an expression, failing if the value is negative or overflows $2^X$.
+
+Each call to an unconstrained function from constrained code range-checks the values it returns, so compute a witness in a single call (e.g. with `compute_quadratic_expression`, or your own `unconstrained fn`) rather than by chaining `__` methods. For `a * b + c * d`, chaining (`a.__mul(&b).__add(&c.__mul(&d))`) makes three calls and costs about 40 more gates than a single call for `U256`, which removes most of the saving over the operators.
 
 ## Benchmarks
 

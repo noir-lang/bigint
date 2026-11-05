@@ -55,9 +55,9 @@ pub trait BigInt: Add + Sub + Mul + Div + Rem + Eq {
     /// Constructs a BigInt from raw limbs without range-checking.
     ///
     /// # Safety
-    /// No range checks are performed on the limbs. The resulting value may not
-    /// represent a valid BigInt. Use for cases where limbs intentionally exceed
-    /// the normal range (e.g. quotients from unconstrained computation).
+    /// No range checks are performed on the limbs, so the resulting value may not be a valid
+    /// `BigInt`. Use only when the limbs are known to be in range, or call `validate_in_range` on
+    /// the result.
     fn from_limbs_unsafe(limbs: [u128; N]) -> Self;
 
     /// Returns the raw limb representation.
@@ -589,7 +589,15 @@ pub unconstrained fn compute_quadratic_expression<T: BigInt, let LHS_N: u32, let
 /// call to this function.
 ///
 /// # Expression Format
-/// Constrains: `sum_i(product(lhs_terms[i]) * product(rhs_terms[i])) + sum(linear_terms) == 0 (mod 2^BITS)`
+/// Constrains `sum_i(sum(lhs_terms[i]) * sum(rhs_terms[i])) + sum(linear_terms) == 0` over the
+/// integers, where each term is negated if its flag is `true`.
+///
+/// # Computing witnesses
+/// Each call to an unconstrained function from constrained code range-checks the values it
+/// returns. Compute a witness in a single call, e.g. with `compute_quadratic_expression` or your
+/// own `unconstrained fn`, rather than by chaining `__` methods: e.g. for `a * b + c * d`,
+/// `unsafe { a.__mul(&b).__add(&c.__mul(&d)) }` makes three calls, which costs about 40 more gates
+/// than one call for `U256`.
 ///
 /// # Parameters
 /// - `lhs_terms`: Left-hand side terms for each product. Shape: `[NUM_PRODUCTS][LHS_N]`
@@ -601,9 +609,11 @@ pub unconstrained fn compute_quadratic_expression<T: BigInt, let LHS_N: u32, let
 ///
 /// # Example: Constraining `a * b + c - result == 0`
 /// ```
-/// // First compute result unconstrainedly
+/// // First compute result in a single unconstrained call
 /// // Safety: witness computation, constrained below
-/// let result = unsafe { a.__mul(b).__add(c) };
+/// let result = unsafe {
+///     compute_quadratic_expression([[a]], [[false]], [[b]], [[false]], [c], [false])
+/// };
 ///
 /// // Then constrain: a * b + c - result == 0
 /// evaluate_quadratic_expression(
@@ -619,7 +629,7 @@ pub unconstrained fn compute_quadratic_expression<T: BigInt, let LHS_N: u32, let
 /// # Example: Constraining `(a + b) * c - d == 0`
 /// ```
 /// // Safety: witness computation
-/// let d = unsafe { (a.__add(b)).__mul(c) };
+/// let d = unsafe { a.__add(&b).__mul(&c) };
 ///
 /// // Constrain: (a + b) * c - d == 0
 /// evaluate_quadratic_expression(

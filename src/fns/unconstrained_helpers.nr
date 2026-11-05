@@ -122,8 +122,6 @@ pub(crate) unconstrained fn compute_gte_flags<let N: u32>(
     (underflow, borrow_flags)
 }
 
-// ------------------------------ MODULAR REDUCTION ------------------------------
-
 // ------------------------------ ARITHMETIC HELPER FUNCTIONS ------------------------------
 // These are the functions that operate on limbs as if they were just big integers
 
