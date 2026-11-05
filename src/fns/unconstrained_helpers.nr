@@ -47,7 +47,7 @@ pub(crate) unconstrained fn __from_field<let N: u32>(val: Field) -> [u128; N] {
 }
 
 // ------------------------------ ARITHMETIC WITH FLAGS HELPER FUNCTIONS ------------------------------
-// These are the functions that compute modular operations results as well as borrow and carry flags for constraints
+// These are the functions that compute borrow and carry flags for constraints
 
 /// Compute the carry flags for the limb-wise addition `lhs + rhs` (unconstrained)
 ///
