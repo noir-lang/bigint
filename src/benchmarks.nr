@@ -190,3 +190,22 @@ mod U512_Bench {}
 
 #[make_bench(quote { crate::types::U2048::U2048 })]
 mod U2048_Bench {}
+
+// `MulDiv` for U256
+use crate::types::U256::U256;
+use mul_div::MulDiv;
+
+#[export]
+fn mul_div_floor_U256(a: U256, b: U256, d: U256) -> U256 {
+    a.mul_div_floor(b, d)
+}
+
+#[export]
+fn mul_div_rem_U256(a: U256, b: U256, d: U256) -> (U256, U256) {
+    a.mul_div_rem(b, d)
+}
+
+#[export]
+fn mul_div_ceil_U256(a: U256, b: U256, d: U256) -> U256 {
+    a.mul_div_ceil(b, d)
+}

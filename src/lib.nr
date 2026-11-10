@@ -12,6 +12,9 @@ mod conversions;
 pub(crate) mod fns;
 pub(crate) mod utils;
 
+// `MulDiv` (from the `mul_div` library) for U256
+mod u256_mul_div;
+
 mod benchmarks;
 mod tests;
 
@@ -54,6 +57,10 @@ pub use bigint::{
 };
 pub use bigint::BigInt;
 pub use bigint::derive_bigint;
+
+// The multiply-divide trait, implemented for U256, so users can call it without
+// depending on `mul_div` themselves.
+pub use mul_div::MulDiv;
 
 // Re-export the pre-defined bigint types, for easier access:
 pub use types::U1024::U1024;

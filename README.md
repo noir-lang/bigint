@@ -96,6 +96,23 @@ Every arithmetic operation has an unconstrained counterpart prefixed with `__`: 
 
 These generate no constraints. Their results must be constrained, ideally with `evaluate_quadratic_expression` (see below).
 
+### Multiply-divide
+
+`U256` implements the `MulDiv` trait from [`mul_div`](https://github.com/noir-lang/mul-div), re-exported as `bigint::MulDiv`. It computes `a * b / d` with the full 512-bit product, so `a * b` itself never overflows:
+
+- `a.mul_div_floor(b, d)`: `floor(a * b / d)`
+- `a.mul_div_ceil(b, d)`: `ceil(a * b / d)`
+- `a.mul_div_rem(b, d)`: floor quotient and remainder `(q, r)`
+
+They fail if `d` is zero or the result does not fit in 256 bits.
+
+```rust
+use bigint::{BigInt, MulDiv, U256};
+
+let max = U256::from_le_bytes([255; 32]);
+assert_eq(max.mul_div_floor(max, max), max);
+```
+
 ### Constructors and limb access
 
 - `zero`, `one`

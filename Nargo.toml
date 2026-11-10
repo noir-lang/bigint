@@ -5,4 +5,5 @@ authors = [""]
 compiler_version = ">=1.0.0"
 
 [dependencies]
+mul_div = { git = "https://github.com/noir-lang/mul-div", tag = "master" }
 poseidon = { git = "https://github.com/noir-lang/poseidon", tag = "v0.3.0" }

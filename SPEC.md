@@ -97,6 +97,18 @@ Division by zero fails with `attempt to divide by zero`. The circuit itself also
 
 For unchecked inputs, `+` and `-` never return an incorrect result: they return the exact sum or difference of `value(a)` and `value(b)`, or fail. They may fail for some non-canonical inputs even when the result is in range, e.g. `[2^120, 0, 0] - [0, 1, 0]`.
 
+### Multiply-divide (`U256` only)
+
+`U256` implements the `MulDiv` trait from the [`mul_div`](https://github.com/noir-lang/mul-div) library, re-exported as `bigint::MulDiv`. The product `a * b` is kept in full (up to 512 bits), so it never overflows on its own.
+
+| Operation | Result | Fails if | Range-checks inputs |
+| --- | --- | --- | --- |
+| `a.mul_div_rem(b, d)` | `(floor(a * b / d), a * b mod d)` | `d == 0` (`mul_div: zero denominator`), the quotient is `>= 2^256` (`mul_div: quotient overflow`), or an input is not canonical | yes |
+| `a.mul_div_floor(b, d)` | `floor(a * b / d)` | as `mul_div_rem` | yes |
+| `a.mul_div_ceil(b, d)` | `ceil(a * b / d)` | as `mul_div_rem`, or the rounded-up quotient is `>= 2^256` (`mul_div: ceiling overflow`) | yes |
+
+The circuit proves `a*b = q*d + r` over the integers with `evaluate_quadratic_expression`, together with `d != 0`, `r < d` and the limb ranges of `q` and `r`.
+
 ## Unconstrained functions
 
 Functions prefixed with `__` generate no constraints. For canonical inputs they return the same values as their constrained counterparts. [Canonical inputs](#canonical-inputs) describes their results for non-canonical inputs.
