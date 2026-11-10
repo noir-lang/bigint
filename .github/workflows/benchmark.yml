@@ -14,9 +14,8 @@ jobs:
     name: Benchmark library
     runs-on: ubuntu-latest
     permissions:
-      # Required to read and write workflow artifacts, e.g. for noir-gates-diff to find the
-      # gates report from `main`. This repository is internal, so this needs an explicit grant.
-      actions: write
+      # actions permission so noir-gates-diff can list and download the report artifacts from `main`
+      actions: read
       contents: write
       pull-requests: write
     steps:
@@ -46,6 +45,9 @@ jobs:
         uses: noir-lang/noir-gates-diff@dbe920a8dcc3370af4be4f702ca9cef29317bec1
         with:
           report: gates_report.json
+          # Upload PR reports under `pr-<number>`: the default is the branch name, so a fork
+          # branch named `main` would replace the `main` baseline
+          head: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || github.ref_name }}
           summaryQuantile: 0.9 # only display the 10% most significant circuit size diffs in the summary (defaults to 20%)
 
       - name: Store ACIR opcode benchmark result
@@ -82,7 +84,8 @@ jobs:
           skip-fetch-gh-pages: true
 
       - name: Add gates diff to sticky comment
-        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+        # Fork PRs get a read-only token, so commenting would fail the job
+        if: github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           # each diff is posted as its own comment
@@ -106,6 +109,8 @@ jobs:
         uses: noir-lang/noir-gates-diff@dbe920a8dcc3370af4be4f702ca9cef29317bec1
         with:
           report: brillig_report.json
+          # Upload PR reports under `pr-<number>`: see "Compare gates reports"
+          head: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || github.ref_name }}
           header: |
             # Changes to Brillig bytecode sizes
           brillig_report: true
@@ -129,7 +134,8 @@ jobs:
           skip-fetch-gh-pages: true
 
       - name: Add brillig diff to sticky comment
-        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+        # Fork PRs get a read-only token, so commenting would fail the job
+        if: github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           # each diff is posted as its own comment
