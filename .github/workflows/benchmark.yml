@@ -45,9 +45,10 @@ jobs:
         uses: noir-lang/noir-gates-diff@dbe920a8dcc3370af4be4f702ca9cef29317bec1
         with:
           report: gates_report.json
-          # Upload PR reports under `pr-<number>`: the default is the branch name, so a fork
-          # branch named `main` would replace the `main` baseline
-          head: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || github.ref_name }}
+          # Fork PRs upload under `pr-<number>`: the default is the branch name, so a fork
+          # branch named `main` would replace the `main` baseline. Same-repo PRs keep their
+          # branch name, which is the baseline for PRs stacked on that branch.
+          head: ${{ github.event.pull_request.head.repo.fork && format('pr-{0}', github.event.number) || github.head_ref || github.ref_name }}
           summaryQuantile: 0.9 # only display the 10% most significant circuit size diffs in the summary (defaults to 20%)
 
       - name: Store ACIR opcode benchmark result
@@ -60,8 +61,9 @@ jobs:
           benchmark-data-dir-path: "dev/bench"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: ${{ github.ref == 'refs/heads/main' }}
-          comment-always: ${{ contains( github.event.pull_request.labels.*.name, 'bench-show') }}
-          comment-on-alert: true
+          comment-always: ${{ contains( github.event.pull_request.labels.*.name, 'bench-show') && !github.event.pull_request.head.repo.fork }}
+          # Fork PRs get a read-only token, so commenting would fail the job
+          comment-on-alert: ${{ !github.event.pull_request.head.repo.fork }}
           alert-threshold: "101%"
           fail-on-alert: false
           max-items-in-chart: 50
@@ -76,8 +78,9 @@ jobs:
           benchmark-data-dir-path: "dev/bench"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: ${{ github.ref == 'refs/heads/main' }}
-          comment-always: ${{ contains( github.event.pull_request.labels.*.name, 'bench-show') }}
-          comment-on-alert: true
+          comment-always: ${{ contains( github.event.pull_request.labels.*.name, 'bench-show') && !github.event.pull_request.head.repo.fork }}
+          # Fork PRs get a read-only token, so commenting would fail the job
+          comment-on-alert: ${{ !github.event.pull_request.head.repo.fork }}
           alert-threshold: "101%"
           fail-on-alert: false
           max-items-in-chart: 50
@@ -109,8 +112,8 @@ jobs:
         uses: noir-lang/noir-gates-diff@dbe920a8dcc3370af4be4f702ca9cef29317bec1
         with:
           report: brillig_report.json
-          # Upload PR reports under `pr-<number>`: see "Compare gates reports"
-          head: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || github.ref_name }}
+          # Fork PRs upload under `pr-<number>`: see "Compare gates reports"
+          head: ${{ github.event.pull_request.head.repo.fork && format('pr-{0}', github.event.number) || github.head_ref || github.ref_name }}
           header: |
             # Changes to Brillig bytecode sizes
           brillig_report: true
@@ -126,8 +129,9 @@ jobs:
           benchmark-data-dir-path: "dev/bench"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: ${{ github.ref == 'refs/heads/main' }}
-          comment-always: ${{ contains( github.event.pull_request.labels.*.name, 'bench-show') }}
-          comment-on-alert: true
+          comment-always: ${{ contains( github.event.pull_request.labels.*.name, 'bench-show') && !github.event.pull_request.head.repo.fork }}
+          # Fork PRs get a read-only token, so commenting would fail the job
+          comment-on-alert: ${{ !github.event.pull_request.head.repo.fork }}
           alert-threshold: "101%"
           fail-on-alert: false
           max-items-in-chart: 50
