@@ -808,7 +808,6 @@ fn u256_max_minus_1_max_minus_1_max_minus_2_ceil_rejects() {
 }
 
 // The 2^120 limb is not canonical: every U256 limb holds at most 120 bits.
-
 // The failure message depends on the execution mode: `call to assert_max_bit_size`
 // when constrained, `BigInt is not in range` under `--force-brillig`. The
 // unconstrained test below pins the latter.
@@ -822,4 +821,18 @@ fn rejects_noncanonical_input() {
 unconstrained fn rejects_noncanonical_input_unconstrained() {
     let bad = U256::from_limbs_unsafe([0x1000000000000000000000000000000, 0, 0]);
     let _ = bad.mul_div_rem(U256::one(), U256::one());
+}
+
+// In unconstrained code the verifier is skipped, so each input's own range check is
+// the only guard. These pin the checks on `rhs` and `denominator`.
+#[test(should_fail_with = "BigInt is not in range")]
+unconstrained fn rejects_noncanonical_rhs_unconstrained() {
+    let bad = U256::from_limbs_unsafe([0x1000000000000000000000000000000, 0, 0]);
+    let _ = U256::one().mul_div_rem(bad, U256::one());
+}
+
+#[test(should_fail_with = "BigInt is not in range")]
+unconstrained fn rejects_noncanonical_denominator_unconstrained() {
+    let bad = U256::from_limbs_unsafe([0x1000000000000000000000000000000, 0, 0]);
+    let _ = U256::one().mul_div_rem(U256::one(), bad);
 }
