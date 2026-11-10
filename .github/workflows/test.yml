@@ -53,6 +53,9 @@ jobs:
       - name: Run Noir tests
         run: nargo test
 
+      - name: Run MulDiv tests unconstrained
+        run: nargo test --force-brillig u256_mul_div
+
   format:
     runs-on: ubuntu-latest
     steps:
