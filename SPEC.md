@@ -19,6 +19,7 @@ Every pull request which changes behaviour must update this document in the same
 The library's functions must meet these requirements. A function which does not has a bug, which is listed in the [consistency review](#consistency-review) until it is fixed.
 
 - **Equality distinguishes distinct canonical values.** If `a` and `b` are canonical and `value(a) != value(b)`, the equality tests (`==`, `!=`, `__eq` and `assert_is_not_equal`) treat them as different. So equality must not be tested via the values' encodings in `Field`: when `BITS >= 254`, distinct values which differ by a multiple of `p` have the same encoding.
+- **Constrained and unconstrained execution agree.** This is a core aim of the library. For any inputs, a function either fails in both constrained and unconstrained execution, or returns the same result in both. Only the failure messages may differ. So code which is run or tested unconstrained behaves as it will in a circuit.
 
 ## Types
 
@@ -128,7 +129,7 @@ Functions prefixed with `__` generate no constraints. For canonical inputs they 
 
 ### Constrained functions in unconstrained code
 
-When called from unconstrained code, `+`, `-`, `*`, `/`, `%` and `div_rem` skip their constraints and compute their result as the corresponding `__` function does: `+` as `__add`, and the others after checking that their inputs are canonical. All other functions perform their checks as assertions. The results agree with constrained execution for canonical inputs. For unchecked inputs, every function either returns the correct result or fails, in both modes, but a function may fail in one mode and succeed in the other: see [canonical inputs](#canonical-inputs).
+When called from unconstrained code, `+`, `-`, `*`, `/`, `%` and `div_rem` skip their constraints and compute their result as the corresponding `__` function does: `+` as `__add`, and the others after checking that their inputs are canonical. All other functions perform their checks as assertions. The results agree with constrained execution for canonical inputs. For unchecked inputs, every function either returns the correct result or fails, in both modes. A function which fails in one mode and succeeds in the other violates the [requirement](#requirements) that the modes agree: see [canonical inputs](#canonical-inputs) and [consistency review](#consistency-review), item 1.
 
 ## Quadratic expressions
 
@@ -238,7 +239,7 @@ Observed results for `U256`, with `a = [2^120, 0, 0]` (`2^120` with non-canonica
 | `a.__eq([0, 1, 0])` | — | fails with `BigInt is not in range` |
 | `assert_is_not_equal(a, [0, 1, 0])` | fails | fails with `BigInt is not in range` |
 
-So in both modes no function returns a wrong result for unchecked inputs. The modes may differ in which unchecked inputs they accept: `-` checks its inputs only in unconstrained execution. See [consistency review](#consistency-review), item 1.
+So in both modes no function returns a wrong result for unchecked inputs. The modes do not yet accept the same unchecked inputs, although the [requirements](#requirements) say they must: `-` checks its inputs only in unconstrained execution. See [consistency review](#consistency-review), item 1.
 
 ## Consistency review
 
@@ -246,4 +247,4 @@ Known inconsistencies on `main`, and the open pull requests which address them.
 
 1. **Canonical-input handling differs between functions and between execution modes** (see [canonical inputs](#canonical-inputs)). No function returns an incorrect result for unchecked inputs in either mode, but:
    - In constrained execution, `+` and `-` do not check their inputs, while every other binary operation does. They never return an incorrect result, but `a + b` may succeed where `a == b` or `a * b` fails, and may also fail for non-canonical inputs whose sum is in range. The README documents this.
-   - In unconstrained execution, `+` and `__add` do not check their inputs, while `-` and the other `__` functions do. So `[0, 1, 0] - [2^120, 0, 0]` succeeds in a circuit but fails in unconstrained code.
+   - In unconstrained execution, `+` and `__add` do not check their inputs, while `-` and the other `__` functions do. So `[0, 1, 0] - [2^120, 0, 0]` succeeds in a circuit but fails in unconstrained code, which violates the requirement that constrained and unconstrained execution agree.
