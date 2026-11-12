@@ -24,10 +24,14 @@ Refer to [Noir's docs](https://noir-lang.org/docs/getting_started/noir_installat
 
 In your `Nargo.toml` file, add the version of this library you would like to install under `[dependencies]`:
 
+<!-- x-release-please-start-version -->
+
 ```toml
 [dependencies]
-bigint = { tag = "vX.Y.Z", git = "https://github.com/noir-lang/bigint" }
+bigint = { tag = "v0.0.0", git = "https://github.com/noir-lang/bigint" }
 ```
+
+<!-- x-release-please-end -->
 
 ## Quick example
 
